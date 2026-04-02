@@ -16,11 +16,126 @@ _plain="\033[0m"
 HY2_CONF_DIR="/etc/hysteria"
 HY2_CONF_FILE="${HY2_CONF_DIR}/config.yaml"
 HY2_META_FILE="${HY2_CONF_DIR}/meta.info"
+HY2_SERVICE="hysteria-server.service"
 
 msg() { echo -e "${_blue}[信息]${_plain} $1"; }
 ok() { echo -e "${_green}[成功]${_plain} $1"; }
 err() { echo -e "${_red}[错误]${_plain} $1"; }
 print_line() { echo -e "${_blue}=====================================================${_plain}"; }
+
+is_valid_port() {
+    local p="$1"
+    [[ "${p}" =~ ^[0-9]+$ ]] && (( p >= 1 && p <= 65535 ))
+}
+
+is_valid_domain() {
+    local d="$1"
+    [[ "${d}" =~ ^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[A-Za-z]{2,63}$ ]]
+}
+
+is_valid_url() {
+    local u="$1"
+    [[ "${u}" =~ ^https?://[^[:space:]]+$ ]]
+}
+
+is_valid_email() {
+    local e="$1"
+    [[ "${e}" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]
+}
+
+yaml_single_quote() {
+    local raw="$1"
+    local escaped="${raw//\'/\'\'}"
+    printf "'%s'" "${escaped}"
+}
+
+fetch_server_ip() {
+    local ip
+    ip="$(curl -fsS4 --max-time 6 https://api.ipify.org 2>/dev/null || true)"
+    if [[ -z "${ip}" ]]; then
+        ip="$(curl -fsS6 --max-time 6 https://api64.ipify.org 2>/dev/null || true)"
+    fi
+    if [[ -z "${ip}" ]]; then
+        ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+    fi
+    echo "${ip}"
+}
+
+read_meta_info() {
+    ip=""
+    port=""
+    password=""
+    sni=""
+    insecure=""
+
+    while IFS='=' read -r key value; do
+        case "${key}" in
+            ip) ip="${value}" ;;
+            port) port="${value}" ;;
+            password) password="${value}" ;;
+            sni) sni="${value}" ;;
+            insecure) insecure="${value}" ;;
+        esac
+    done < "${HY2_META_FILE}"
+
+    if [[ -z "${ip}" || -z "${port}" || -z "${password}" || -z "${sni}" || -z "${insecure}" ]]; then
+        return 1
+    fi
+    return 0
+}
+
+service_control_menu() {
+    while true; do
+        clear
+        print_line
+        echo -e "               ${_green}--- 服务控制 ---${_plain}"
+        print_line
+        echo -e "    (1) 启动服务"
+        echo -e "    (2) 停止服务"
+        echo -e "    (3) 重启服务"
+        echo -e "    (4) 查看状态"
+        echo -e "    (0) 返回主菜单"
+        print_line
+        read -p " => 请选择操作 [0-4]: " action
+
+        case "${action}" in
+            1)
+                if systemctl start "${HY2_SERVICE}"; then
+                    ok "服务已启动。"
+                else
+                    err "启动失败，请检查日志。"
+                fi
+                sleep 1
+                ;;
+            2)
+                if systemctl stop "${HY2_SERVICE}"; then
+                    ok "服务已停止。"
+                else
+                    err "停止失败，请检查日志。"
+                fi
+                sleep 1
+                ;;
+            3)
+                if systemctl restart "${HY2_SERVICE}"; then
+                    ok "服务已重启。"
+                else
+                    err "重启失败，请检查日志。"
+                fi
+                sleep 1
+                ;;
+            4)
+                if systemctl is-active --quiet "${HY2_SERVICE}"; then
+                    ok "当前状态: 运行中"
+                else
+                    err "当前状态: 未运行"
+                fi
+                sleep 1
+                ;;
+            0) return 0 ;;
+            *) err "输入错误"; sleep 1 ;;
+        esac
+    done
+}
 
 # --- 2. 核心控制模块: 安装与卸载 ---
 install_hy2_core() {
@@ -30,9 +145,15 @@ install_hy2_core() {
         msg "正在调用官方脚本安装 Hysteria2 内核..."
     fi
     
-    bash <(curl -fsSL https://get.hy2.sh/)
-    
-    systemctl enable hysteria-server.service >/dev/null 2>&1
+    if ! bash <(curl -fsSL https://get.hy2.sh/); then
+        err "内核安装/更新失败，请检查网络后重试。"
+        return 1
+    fi
+
+    if ! systemctl enable "${HY2_SERVICE}" >/dev/null 2>&1; then
+        err "已安装内核，但设置开机自启失败，请手动执行: systemctl enable ${HY2_SERVICE}"
+        return 1
+    fi
     ok "Hysteria2 内核部署/更新完成！"
 }
 
@@ -41,8 +162,8 @@ uninstall_hy2() {
     echo -e "${_red}[警告] 这将彻底卸载 Hysteria2 及所有节点配置！${_plain}"
     read -p " => 确定要继续吗？(y/n): " confirm
     if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
-        systemctl stop hysteria-server.service >/dev/null 2>&1
-        systemctl disable hysteria-server.service >/dev/null 2>&1
+        systemctl stop "${HY2_SERVICE}" >/dev/null 2>&1 || true
+        systemctl disable "${HY2_SERVICE}" >/dev/null 2>&1 || true
         
         rm -f /usr/local/bin/hysteria
         rm -rf /etc/hysteria
@@ -66,6 +187,11 @@ config_hy2() {
     
     read -p " => 请设置监听端口 (默认 443): " port
     [[ -z "${port}" ]] && port=443
+    if ! is_valid_port "${port}"; then
+        err "端口无效，请输入 1-65535 的整数。"
+        sleep 2
+        return 1
+    fi
     
     local default_pwd=$(head -c 16 /dev/urandom | od -An -t x | tr -d ' ')
     read -p " => 请设置认证密码 (默认随机: ${default_pwd}): " password
@@ -73,32 +199,56 @@ config_hy2() {
 
     read -p " => 请设置伪装网址 (默认 https://bing.com): " masquerade_url
     [[ -z "${masquerade_url}" ]] && masquerade_url="https://bing.com"
+    if ! is_valid_url "${masquerade_url}"; then
+        err "伪装网址格式无效，必须以 http:// 或 https:// 开头。"
+        sleep 2
+        return 1
+    fi
 
     echo -e "\n[*] 请选择证书模式："
     echo -e "  (1) CA 域名证书 (推荐，需要提前将域名解析到本 VPS)"
     echo -e "  (2) 自签证书 (无需域名，直接使用 IP 连通)"
     read -p " => 请选择 [1-2]: " cert_type
+    if [[ "${cert_type}" != "1" && "${cert_type}" != "2" ]]; then
+        err "证书模式输入无效，请输入 1 或 2。"
+        sleep 2
+        return 1
+    fi
 
-    mkdir -p ${HY2_CONF_DIR}
+    if ! mkdir -p "${HY2_CONF_DIR}"; then
+        err "创建配置目录失败: ${HY2_CONF_DIR}"
+        sleep 2
+        return 1
+    fi
 
     if [[ "${cert_type}" == "1" ]]; then
         read -p " [*] 请输入已解析到本机的域名: " domain
+        if ! is_valid_domain "${domain}"; then
+            err "域名格式无效，请输入有效域名（例如 example.com）。"
+            sleep 2
+            return 1
+        fi
         read -p " [*] 请输入邮箱 (用于自动申请证书，随意填): " email
         [[ -z "${email}" ]] && email="admin@${domain}"
+        if ! is_valid_email "${email}"; then
+            err "邮箱格式无效，请重新输入。"
+            sleep 2
+            return 1
+        fi
         
         cat << EOF > ${HY2_CONF_FILE}
 listen: :${port}
 acme:
   domains:
-    - ${domain}
-  email: ${email}
+    - $(yaml_single_quote "${domain}")
+  email: $(yaml_single_quote "${email}")
 auth:
   type: password
-  password: ${password}
+  password: $(yaml_single_quote "${password}")
 masquerade:
   type: proxy
   proxy:
-    url: ${masquerade_url}
+    url: $(yaml_single_quote "${masquerade_url}")
     rewriteHost: true
 EOF
         local sni="${domain}"
@@ -108,12 +258,23 @@ EOF
         msg "正在生成高强度自签名证书..."
         read -p " [*] 请输入用于伪装的 SNI 域名 (默认 bing.com): " sni
         [[ -z "${sni}" ]] && sni="bing.com"
+        if ! is_valid_domain "${sni}"; then
+            err "SNI 域名格式无效，请输入有效域名。"
+            sleep 2
+            return 1
+        fi
         
-        openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
+        if ! openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
         -keyout ${HY2_CONF_DIR}/server.key -out ${HY2_CONF_DIR}/server.crt \
-        -subj "/CN=${sni}" -days 36500 >/dev/null 2>&1
+        -subj "/CN=${sni}" -days 36500 >/dev/null 2>&1; then
+            err "自签证书生成失败，请确认系统已安装 openssl。"
+            sleep 2
+            return 1
+        fi
         
-        chown hysteria ${HY2_CONF_DIR}/server.key ${HY2_CONF_DIR}/server.crt
+        if id hysteria >/dev/null 2>&1; then
+            chown hysteria ${HY2_CONF_DIR}/server.key ${HY2_CONF_DIR}/server.crt || true
+        fi
         
         cat << EOF > ${HY2_CONF_FILE}
 listen: :${port}
@@ -122,23 +283,39 @@ tls:
   key: ${HY2_CONF_DIR}/server.key
 auth:
   type: password
-  password: ${password}
+  password: $(yaml_single_quote "${password}")
 masquerade:
   type: proxy
   proxy:
-    url: ${masquerade_url}
+    url: $(yaml_single_quote "${masquerade_url}")
     rewriteHost: true
 EOF
         local insecure="true"
     fi
 
-    SERVER_IP=$(curl -s4 https://api.ipify.org || curl -s6 https://api64.ipify.org)
-    echo -e "ip=${SERVER_IP}\nport=${port}\npassword=${password}\nsni=${sni}\ninsecure=${insecure}" > ${HY2_META_FILE}
+    SERVER_IP="$(fetch_server_ip)"
+    if [[ -z "${SERVER_IP}" ]]; then
+        err "无法获取服务器 IP，请检查网络后重试。"
+        sleep 2
+        return 1
+    fi
+
+    cat > "${HY2_META_FILE}" << EOF
+ip=${SERVER_IP}
+port=${port}
+password=${password}
+sni=${sni}
+insecure=${insecure}
+EOF
 
     msg "正在重启 Hysteria2 服务以应用新配置..."
-    systemctl restart hysteria-server.service
+    if ! systemctl restart "${HY2_SERVICE}"; then
+        err "重启服务失败，请检查配置后重试。"
+        sleep 2
+        return 1
+    fi
     sleep 2
-    if systemctl is-active --quiet hysteria-server.service; then
+    if systemctl is-active --quiet "${HY2_SERVICE}"; then
         ok "Hysteria2 节点配置并启动成功！"
     else
         err "启动失败！可能是端口被占用，或 CA 证书申请失败。请使用菜单 (5) 查看日志。"
@@ -154,7 +331,11 @@ show_info() {
         return
     fi
     
-    source ${HY2_META_FILE}
+    if ! read_meta_info; then
+        err "节点元数据损坏或缺失，请重新执行 (2) 配置节点。"
+        sleep 2
+        return
+    fi
 
     clear
     print_line
@@ -206,7 +387,7 @@ main_menu() {
             core_version=$(hysteria version | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)
             [[ -z "$core_version" ]] && core_version="未知版本"
             
-            if systemctl is-active --quiet hysteria-server.service; then
+            if systemctl is-active --quiet "${HY2_SERVICE}"; then
                 status="${_green}运行中${_plain}"
             fi
         fi
@@ -219,7 +400,7 @@ main_menu() {
         echo -e "    (3) [>] 查看客户端配置与分享链接"
         echo -e ""
         echo -e "  [*] 服务控制"
-        echo -e "    (4) [~] 启动 / 停止 / 重启 服务"
+        echo -e "    (4) [~] 启动 / 停止 / 重启 / 状态"
         echo -e "    (5) [i] 查看实时运行日志"
         echo -e "    (6) [-] 完全卸载清理"
         echo -e "    (0) [x] 退出面板"
@@ -231,11 +412,8 @@ main_menu() {
             1) install_hy2_core; sleep 2 ;;
             2) config_hy2 ;;
             3) show_info ;;
-            4) 
-                systemctl restart hysteria-server.service
-                ok "服务已重启！"; sleep 1 
-                ;;
-            5) journalctl -u hysteria-server.service -f ;;
+            4) service_control_menu ;;
+            5) journalctl -u "${HY2_SERVICE}" -f ;;
             6) uninstall_hy2 ;;
             0) exit 0 ;;
             *) err "输入错误"; sleep 1 ;;
