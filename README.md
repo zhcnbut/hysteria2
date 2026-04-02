@@ -86,6 +86,107 @@ chmod +x scripts/verify.sh
 - `bash -n` 语法检查
 - `shellcheck` 静态检查
 
+## ✅ VPS 冒烟测试（5 分钟）
+
+以下步骤用于在一台全新 Linux VPS 上快速验证 `v1.1.0` 可用性。
+
+### 1) 一键安装面板
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/LuoPoJunZi/hysteria2-luopo/main/install.sh)
+```
+
+通过标准：
+
+- 终端提示“面板安装完成”
+- 可直接进入 `hy2` 菜单界面
+
+### 2) 安装/更新 Hysteria2 内核（菜单 1）
+
+在面板中输入：
+
+```text
+1
+```
+
+通过标准：
+
+- 提示内核部署/更新完成
+- 菜单状态行出现 Core 版本号（如 `v2.x.x`）
+
+### 3) 生成节点配置（菜单 2）
+
+在面板中输入：
+
+```text
+2
+```
+
+建议测试参数：
+
+- 端口：`443`
+- 密码：直接回车使用默认随机值
+- 伪装网址：`https://bing.com`
+- 证书模式：先选 `2`（自签）做快速验证
+- SNI：`bing.com`
+
+通过标准：
+
+- 提示“节点配置并启动成功”
+- 无回滚错误提示
+
+### 4) 检查分享链接与 JSON（菜单 3）
+
+在面板中输入：
+
+```text
+3
+```
+
+通过标准：
+
+- 成功显示 `hysteria2://` 链接
+- 成功显示 Sing-box JSON 片段
+- 链接中的参数完整（`sni`、`insecure`）
+
+### 5) 验证服务控制与日志（菜单 4、5）
+
+先输入：
+
+```text
+4
+```
+
+依次测试：
+
+- 启动服务
+- 停止服务
+- 重启服务
+- 查看状态
+
+再输入：
+
+```text
+5
+```
+
+通过标准：
+
+- 服务控制子菜单各动作有明确成功/失败反馈
+- 日志可正常跟随输出（`journalctl -f`）
+
+### 6) 最后验收命令（可选）
+
+```bash
+systemctl is-active hysteria-server.service
+systemctl status hysteria-server.service --no-pager -l
+```
+
+通过标准：
+
+- `is-active` 输出 `active`
+- `status` 无连续报错或崩溃重启
+
 ## 📜 开源协议
 
 本项目基于 [MIT License](LICENSE) 协议开源。
