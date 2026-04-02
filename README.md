@@ -72,6 +72,20 @@ bash <(curl -fsSL https://raw.githubusercontent.com/LuoPoJunZi/hysteria2-luopo/m
 如果你觉得这个项目拯救了你的网络，欢迎点击右上角的 **⭐ Star** 支持一下！
 如果你发现了 Bug 或有更好的优化建议，欢迎提交 Issues 或 Pull Requests。
 
+## 🧪 开发自检
+
+如果你在本地修改了 `hy2.sh` 或 `install.sh`，建议先跑一次脚本质量检查：
+
+```bash
+chmod +x scripts/verify.sh
+./scripts/verify.sh
+```
+
+该脚本会执行：
+
+- `bash -n` 语法检查
+- `shellcheck` 静态检查
+
 ## 📜 开源协议
 
 本项目基于 [MIT License](LICENSE) 协议开源。
