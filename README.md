@@ -43,7 +43,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/LuoPoJunZi/hysteria2-luopo/m
 
 ```text
 =====================================================
-        Hysteria2-LuoPo 管理面板 V1.0
+        Hysteria2-LuoPo 管理面板 V1.1
 =====================================================
   [状态] Core: v2.2.4 | 服务: ● 运行中
 =====================================================

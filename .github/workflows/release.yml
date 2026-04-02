@@ -7,6 +7,9 @@ on:
     paths:
       - 'hy2.sh'
       - 'install.sh'
+      - 'README.md'
+      - 'scripts/verify.sh'
+      - '.github/workflows/release.yml'
   workflow_dispatch: # 手动触发按钮
 
 permissions:
@@ -55,14 +58,20 @@ jobs:
           tar --exclude=".git" --exclude=".github" -zcvf ../code.tar.gz .
           mv ../code.tar.gz ./
 
+      - name: Generate Checksums
+        if: env.should_release == 'true'
+        run: |
+          sha256sum code.tar.gz hy2.sh install.sh > SHA256SUMS
+
       - name: Create Release
         if: env.should_release == 'true'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             code.tar.gz
             hy2.sh
             install.sh
+            SHA256SUMS
           tag_name: ${{ env.VERSION }}
           name: Hysteria2-LuoPo ${{ env.VERSION }}
           body: "🤖 自动化构建发布版本: ${{ env.VERSION }}\n\n更新内容请参考最新的代码提交记录。"
