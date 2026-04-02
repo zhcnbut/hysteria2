@@ -23,6 +23,44 @@ ok() { echo -e "${_green}[成功]${_plain} $1"; }
 err() { echo -e "${_red}[错误]${_plain} $1"; }
 print_line() { echo -e "${_blue}=====================================================${_plain}"; }
 
+require_root() {
+    if [[ "${EUID}" -ne 0 ]]; then
+        err "请使用 root 用户运行此脚本。"
+        exit 1
+    fi
+}
+
+require_cmd() {
+    local cmd="$1"
+    if ! command -v "${cmd}" >/dev/null 2>&1; then
+        err "缺少依赖命令: ${cmd}"
+        return 1
+    fi
+    return 0
+}
+
+preflight_check() {
+    local missing=0
+    local cmd
+    for cmd in curl systemctl openssl grep awk hostname journalctl; do
+        if ! require_cmd "${cmd}"; then
+            missing=1
+        fi
+    done
+    if [[ "${missing}" -ne 0 ]]; then
+        err "运行环境依赖不完整，请先安装缺失命令后重试。"
+        exit 1
+    fi
+}
+
+ensure_hy2_core_installed() {
+    if ! command -v hysteria >/dev/null 2>&1; then
+        err "未检测到 Hysteria2 内核，请先执行菜单 (1) 安装/更新内核。"
+        return 1
+    fi
+    return 0
+}
+
 is_valid_port() {
     local p="$1"
     [[ "${p}" =~ ^[0-9]+$ ]] && (( p >= 1 && p <= 65535 ))
@@ -79,6 +117,12 @@ read_meta_info() {
     done < "${HY2_META_FILE}"
 
     if [[ -z "${ip}" || -z "${port}" || -z "${password}" || -z "${sni}" || -z "${insecure}" ]]; then
+        return 1
+    fi
+    if ! is_valid_port "${port}"; then
+        return 1
+    fi
+    if [[ "${insecure}" != "true" && "${insecure}" != "false" ]]; then
         return 1
     fi
     return 0
@@ -180,6 +224,11 @@ uninstall_hy2() {
 
 # --- 3. 核心控制模块: 节点配置与生成 ---
 config_hy2() {
+    if ! ensure_hy2_core_installed; then
+        sleep 2
+        return 1
+    fi
+
     clear
     print_line
     echo -e "               ${_green}--- Hysteria2 节点配置 ---${_plain}"
@@ -220,6 +269,7 @@ config_hy2() {
         sleep 2
         return 1
     fi
+    chmod 700 "${HY2_CONF_DIR}" >/dev/null 2>&1 || true
 
     if [[ "${cert_type}" == "1" ]]; then
         read -p " [*] 请输入已解析到本机的域名: " domain
@@ -251,6 +301,7 @@ masquerade:
     url: $(yaml_single_quote "${masquerade_url}")
     rewriteHost: true
 EOF
+        chmod 600 "${HY2_CONF_FILE}" >/dev/null 2>&1 || true
         local sni="${domain}"
         local insecure="false"
 
@@ -275,6 +326,8 @@ EOF
         if id hysteria >/dev/null 2>&1; then
             chown hysteria ${HY2_CONF_DIR}/server.key ${HY2_CONF_DIR}/server.crt || true
         fi
+        chmod 600 "${HY2_CONF_DIR}/server.key" >/dev/null 2>&1 || true
+        chmod 644 "${HY2_CONF_DIR}/server.crt" >/dev/null 2>&1 || true
         
         cat << EOF > ${HY2_CONF_FILE}
 listen: :${port}
@@ -290,6 +343,7 @@ masquerade:
     url: $(yaml_single_quote "${masquerade_url}")
     rewriteHost: true
 EOF
+        chmod 600 "${HY2_CONF_FILE}" >/dev/null 2>&1 || true
         local insecure="true"
     fi
 
@@ -307,6 +361,7 @@ password=${password}
 sni=${sni}
 insecure=${insecure}
 EOF
+    chmod 600 "${HY2_META_FILE}" >/dev/null 2>&1 || true
 
     msg "正在重启 Hysteria2 服务以应用新配置..."
     if ! systemctl restart "${HY2_SERVICE}"; then
@@ -412,8 +467,20 @@ main_menu() {
             1) install_hy2_core; sleep 2 ;;
             2) config_hy2 ;;
             3) show_info ;;
-            4) service_control_menu ;;
-            5) journalctl -u "${HY2_SERVICE}" -f ;;
+            4)
+                if ensure_hy2_core_installed; then
+                    service_control_menu
+                else
+                    sleep 2
+                fi
+                ;;
+            5)
+                if ensure_hy2_core_installed; then
+                    journalctl -u "${HY2_SERVICE}" --no-pager -n 100 -f
+                else
+                    sleep 2
+                fi
+                ;;
             6) uninstall_hy2 ;;
             0) exit 0 ;;
             *) err "输入错误"; sleep 1 ;;
@@ -422,4 +489,6 @@ main_menu() {
 }
 
 # 入口运行
+require_root
+preflight_check
 main_menu
