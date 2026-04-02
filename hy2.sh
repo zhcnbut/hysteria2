@@ -52,6 +52,10 @@ preflight_check() {
         err "运行环境依赖不完整，请先安装缺失命令后重试。"
         exit 1
     fi
+    if ! systemctl list-unit-files >/dev/null 2>&1; then
+        err "当前系统未检测到可用的 systemd 环境，脚本无法继续运行。"
+        exit 1
+    fi
 }
 
 ensure_hy2_core_installed() {
@@ -100,6 +104,25 @@ url_encode() {
         esac
     done
     printf '%s' "${out}"
+}
+
+json_escape() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "${s}"
+}
+
+format_host_for_url() {
+    local host="$1"
+    if [[ "${host}" == *:* ]]; then
+        printf '[%s]' "${host}"
+        return
+    fi
+    printf '%s' "${host}"
 }
 
 backup_runtime_files() {
@@ -449,10 +472,15 @@ show_info() {
     echo -e "  [*] 跳过证书  : ${_yellow}${insecure}${_plain} (自签必须为true)"
     print_line
 
-    local enc_password enc_sni
+    local enc_password enc_sni url_host json_ip json_password json_sni
     enc_password="$(url_encode "${password}")"
     enc_sni="$(url_encode "${sni}")"
-    local hy2_url="hysteria2://${enc_password}@${ip}:${port}/?sni=${enc_sni}&insecure=${insecure}#Hysteria2-LuoPo"
+    url_host="$(format_host_for_url "${ip}")"
+    local hy2_url="hysteria2://${enc_password}@${url_host}:${port}/?sni=${enc_sni}&insecure=${insecure}#Hysteria2-LuoPo"
+
+    json_ip="$(json_escape "${ip}")"
+    json_password="$(json_escape "${password}")"
+    json_sni="$(json_escape "${sni}")"
     echo -e "${_green}[Link] 一键导入链接 (推荐 V2rayN / NekoBox / Clash):${_plain}"
     echo -e "${hy2_url}"
     print_line
@@ -461,14 +489,14 @@ show_info() {
     echo -e "{
   \"type\": \"hysteria2\",
   \"tag\": \"proxy\",
-  \"server\": \"${ip}\",
+  \"server\": \"${json_ip}\",
   \"server_port\": ${port},
   \"up_mbps\": 50,
   \"down_mbps\": 200,
-  \"password\": \"${password}\",
+  \"password\": \"${json_password}\",
   \"tls\": {
     \"enabled\": true,
-    \"server_name\": \"${sni}\",
+    \"server_name\": \"${json_sni}\",
     \"insecure\": ${insecure}
   }
 }"
