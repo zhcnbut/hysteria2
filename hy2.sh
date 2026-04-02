@@ -17,6 +17,7 @@ HY2_CONF_DIR="/etc/hysteria"
 HY2_CONF_FILE="${HY2_CONF_DIR}/config.yaml"
 HY2_META_FILE="${HY2_CONF_DIR}/meta.info"
 HY2_SERVICE="hysteria-server.service"
+HY2_BACKUP_DIR="${HY2_CONF_DIR}/backup"
 
 msg() { echo -e "${_blue}[信息]${_plain} $1"; }
 ok() { echo -e "${_green}[成功]${_plain} $1"; }
@@ -85,6 +86,41 @@ yaml_single_quote() {
     local raw="$1"
     local escaped="${raw//\'/\'\'}"
     printf "'%s'" "${escaped}"
+}
+
+url_encode() {
+    local raw="$1"
+    local length="${#raw}"
+    local i char out=""
+    for (( i = 0; i < length; i++ )); do
+        char="${raw:i:1}"
+        case "${char}" in
+            [a-zA-Z0-9.~_-]) out+="${char}" ;;
+            *) printf -v out '%s%%%02X' "${out}" "'${char}" ;;
+        esac
+    done
+    printf '%s' "${out}"
+}
+
+backup_runtime_files() {
+    mkdir -p "${HY2_BACKUP_DIR}" || return 1
+    cp -f "${HY2_CONF_FILE}" "${HY2_BACKUP_DIR}/config.yaml.bak" 2>/dev/null || true
+    cp -f "${HY2_META_FILE}" "${HY2_BACKUP_DIR}/meta.info.bak" 2>/dev/null || true
+    return 0
+}
+
+restore_runtime_files() {
+    local restored=0
+    if [[ -f "${HY2_BACKUP_DIR}/config.yaml.bak" ]]; then
+        cp -f "${HY2_BACKUP_DIR}/config.yaml.bak" "${HY2_CONF_FILE}" && restored=1
+    fi
+    if [[ -f "${HY2_BACKUP_DIR}/meta.info.bak" ]]; then
+        cp -f "${HY2_BACKUP_DIR}/meta.info.bak" "${HY2_META_FILE}" || true
+    fi
+    if [[ "${restored}" -eq 1 ]]; then
+        return 0
+    fi
+    return 1
 }
 
 fetch_server_ip() {
@@ -270,6 +306,11 @@ config_hy2() {
         return 1
     fi
     chmod 700 "${HY2_CONF_DIR}" >/dev/null 2>&1 || true
+    if ! backup_runtime_files; then
+        err "备份当前配置失败，已中止以避免覆盖现有配置。"
+        sleep 2
+        return 1
+    fi
 
     if [[ "${cert_type}" == "1" ]]; then
         read -p " [*] 请输入已解析到本机的域名: " domain
@@ -365,7 +406,12 @@ EOF
 
     msg "正在重启 Hysteria2 服务以应用新配置..."
     if ! systemctl restart "${HY2_SERVICE}"; then
-        err "重启服务失败，请检查配置后重试。"
+        err "重启服务失败，正在尝试自动回滚到上一版配置..."
+        if restore_runtime_files && systemctl restart "${HY2_SERVICE}"; then
+            err "已回滚到上一版配置，本次变更未生效。"
+        else
+            err "自动回滚失败，请手动检查 ${HY2_CONF_FILE} 和服务日志。"
+        fi
         sleep 2
         return 1
     fi
@@ -403,7 +449,10 @@ show_info() {
     echo -e "  [*] 跳过证书  : ${_yellow}${insecure}${_plain} (自签必须为true)"
     print_line
 
-    local hy2_url="hysteria2://${password}@${ip}:${port}/?sni=${sni}&insecure=${insecure}#Hysteria2-LuoPo"
+    local enc_password enc_sni
+    enc_password="$(url_encode "${password}")"
+    enc_sni="$(url_encode "${sni}")"
+    local hy2_url="hysteria2://${enc_password}@${ip}:${port}/?sni=${enc_sni}&insecure=${insecure}#Hysteria2-LuoPo"
     echo -e "${_green}[Link] 一键导入链接 (推荐 V2rayN / NekoBox / Clash):${_plain}"
     echo -e "${hy2_url}"
     print_line
