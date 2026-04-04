@@ -50,7 +50,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/LuoPoJunZi/hysteria2-luopo/m
 
 ```text
 =====================================================
-        Hysteria2-LuoPo 管理面板 V1.1
+        Hysteria2-LuoPo 管理面板 V1.2
 =====================================================
   [状态] Core: v2.2.4 | 服务: ● 运行中
 =====================================================
@@ -98,6 +98,7 @@ chmod +x scripts/verify.sh
 - `bash -n` 语法检查
 - `shellcheck` 静态检查
 - 菜单与 README 预览一致性检查（防止文档漂移）
+- 版本号与 README 预览同步检查（防止发版信息漂移）
 
 ## ✅ VPS 冒烟测试（5 分钟）
 

@@ -26,4 +26,7 @@ shellcheck -x hy2.sh install.sh
 echo "[INFO] Checking menu/README consistency..."
 bash scripts/check-menu-sync.sh
 
+echo "[INFO] Checking version marker consistency..."
+bash scripts/check-version-sync.sh
+
 echo "[OK] All checks passed."
