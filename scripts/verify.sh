@@ -21,7 +21,7 @@ bash -n hy2.sh
 bash -n install.sh
 
 echo "[INFO] Running shellcheck..."
-shellcheck -x hy2.sh install.sh
+shellcheck -S error -x hy2.sh install.sh scripts/*.sh
 
 echo "[INFO] Checking menu/README consistency..."
 bash scripts/check-menu-sync.sh

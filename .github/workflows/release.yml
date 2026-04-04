@@ -30,7 +30,7 @@ jobs:
         id: get_version
         run: |
           # 从 hy2.sh 中提取 sh_ver 变量的值
-          VERSION=$(grep -oP 'sh_ver="\K[^"]+' hy2.sh | head -n 1 || echo "")
+          VERSION=$(sed -n 's/^sh_ver="\(v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' hy2.sh | head -n 1 || echo "")
           
           if [ -z "$VERSION" ]; then
             echo "❌ 致命错误：无法在 hy2.sh 中找到 sh_ver 变量！请确保代码中有 sh_ver=\"v1.0.0\" 这样的定义。"
