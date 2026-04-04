@@ -149,6 +149,10 @@ restore_runtime_files() {
     if [[ -f "${HY2_BACKUP_DIR}/meta.info.bak" ]]; then
         cp -f "${HY2_BACKUP_DIR}/meta.info.bak" "${HY2_META_FILE}" || true
     fi
+    if [[ -f "${HY2_CONF_FILE}" ]]; then
+        set_server_config_permissions
+    fi
+    chmod 600 "${HY2_META_FILE}" >/dev/null 2>&1 || true
     if [[ "${restored}" -eq 1 ]]; then
         return 0
     fi
@@ -265,6 +269,15 @@ masquerade:
     url: $(yaml_single_quote "${masquerade_url}")
     rewriteHost: true
 EOF
+}
+
+set_server_config_permissions() {
+    if id hysteria >/dev/null 2>&1; then
+        chown root:hysteria "${HY2_CONF_FILE}" >/dev/null 2>&1 || true
+        chmod 640 "${HY2_CONF_FILE}" >/dev/null 2>&1 || true
+    else
+        chmod 644 "${HY2_CONF_FILE}" >/dev/null 2>&1 || true
+    fi
 }
 
 write_meta_info() {
@@ -570,7 +583,7 @@ config_hy2() {
         fi
         
         write_ca_config "${port}" "${domain}" "${email}" "${password}" "${masquerade_url}"
-        chmod 600 "${HY2_CONF_FILE}" >/dev/null 2>&1 || true
+        set_server_config_permissions
         local sni="${domain}"
         local insecure="false"
 
@@ -599,7 +612,7 @@ config_hy2() {
         chmod 644 "${HY2_CONF_DIR}/server.crt" >/dev/null 2>&1 || true
         
         write_self_signed_config "${port}" "${password}" "${masquerade_url}"
-        chmod 600 "${HY2_CONF_FILE}" >/dev/null 2>&1 || true
+        set_server_config_permissions
         local insecure="true"
     fi
 
@@ -1012,7 +1025,8 @@ restore_latest_manual_backup() {
     cp -f "${latest_dir}/meta.info" "${HY2_META_FILE}" 2>/dev/null || true
     cp -f "${latest_dir}/server.crt" "${HY2_CONF_DIR}/server.crt" 2>/dev/null || true
     cp -f "${latest_dir}/server.key" "${HY2_CONF_DIR}/server.key" 2>/dev/null || true
-    chmod 600 "${HY2_CONF_FILE}" "${HY2_META_FILE}" 2>/dev/null || true
+    set_server_config_permissions
+    chmod 600 "${HY2_META_FILE}" 2>/dev/null || true
     chmod 600 "${HY2_CONF_DIR}/server.key" 2>/dev/null || true
     chmod 644 "${HY2_CONF_DIR}/server.crt" 2>/dev/null || true
 
