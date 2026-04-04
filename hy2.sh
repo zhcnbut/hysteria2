@@ -550,6 +550,32 @@ http:
     read -n 1 -s -r -p "按任意键返回主菜单..."
 }
 
+show_cheatsheet() {
+    clear
+    print_line
+    echo -e "               ${_green}--- 常用指令速查 ---${_plain}"
+    print_line
+    echo -e "${_green}[服务器管理]${_plain}"
+    echo -e "bash <(curl -fsSL https://get.hy2.sh/)"
+    echo -e "systemctl start ${HY2_SERVICE}"
+    echo -e "systemctl restart ${HY2_SERVICE}"
+    echo -e "systemctl status ${HY2_SERVICE} --no-pager -l"
+    echo -e "systemctl stop ${HY2_SERVICE}"
+    echo -e "systemctl enable ${HY2_SERVICE}"
+    echo -e "journalctl -u ${HY2_SERVICE} --no-pager -n 100 -f"
+    print_line
+    echo -e "${_green}[自签证书生成]${_plain}"
+    echo -e "openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \\"
+    echo -e "  -keyout ${HY2_CONF_DIR}/server.key -out ${HY2_CONF_DIR}/server.crt \\"
+    echo -e "  -subj \"/CN=bing.com\" -days 36500"
+    print_line
+    echo -e "${_green}[配置文件路径]${_plain}"
+    echo -e "服务配置: ${HY2_CONF_FILE}"
+    echo -e "元数据  : ${HY2_META_FILE}"
+    print_line
+    read -n 1 -s -r -p "按任意键返回主菜单..."
+}
+
 # --- 5. 主菜单系统 (高兼容极客版) ---
 main_menu() {
     while true; do
@@ -581,10 +607,11 @@ main_menu() {
         echo -e "    (4) [~] 启动 / 停止 / 重启 / 状态"
         echo -e "    (5) [i] 查看实时运行日志"
         echo -e "    (6) [-] 完全卸载清理"
+        echo -e "    (7) [?] 查看常用指令速查"
         echo -e "    (0) [x] 退出面板"
         print_line
         
-        read -p " => 请选择操作 [0-6]: " menu_num
+        read -p " => 请选择操作 [0-7]: " menu_num
         
         case "${menu_num}" in
             1) install_hy2_core; sleep 2 ;;
@@ -605,6 +632,7 @@ main_menu() {
                 fi
                 ;;
             6) uninstall_hy2 ;;
+            7) show_cheatsheet ;;
             0) exit 0 ;;
             *) err "输入错误"; sleep 1 ;;
         esac
