@@ -4,7 +4,7 @@
 # 描述: 下载并部署管理面板到系统级命令
 # ==========================================
 
-set -u
+set -euo pipefail
 
 _red="\033[0;31m"
 _green="\033[0;32m"
@@ -19,6 +19,29 @@ TARGET_BIN="/usr/local/bin/hy2"
 msg() { echo -e "${_yellow}[信息]${_plain} $1"; }
 ok() { echo -e "${_green}[成功]${_plain} $1"; }
 err() { echo -e "${_red}[错误]${_plain} $1"; }
+
+require_cmd() {
+    local cmd="$1"
+    if ! command -v "${cmd}" >/dev/null 2>&1; then
+        err "缺少依赖命令: ${cmd}"
+        return 1
+    fi
+    return 0
+}
+
+preflight_check() {
+    local missing=0
+    local cmd
+    for cmd in grep head mktemp chmod mv; do
+        if ! require_cmd "${cmd}"; then
+            missing=1
+        fi
+    done
+    if [[ "${missing}" -ne 0 ]]; then
+        err "安装器运行环境不完整，请先补齐依赖命令后重试。"
+        exit 1
+    fi
+}
 
 require_root() {
     if [[ "${EUID}" -ne 0 ]]; then
@@ -61,6 +84,20 @@ install_dependencies() {
     return 0
 }
 
+verify_downloaded_panel() {
+    local file="$1"
+    if [[ ! -s "${file}" ]]; then
+        return 1
+    fi
+    if ! head -n 1 "${file}" | grep -q '^#!/bin/bash'; then
+        return 1
+    fi
+    if ! grep -q 'main_menu' "${file}"; then
+        return 1
+    fi
+    return 0
+}
+
 download_panel() {
     local tmp_file
     tmp_file="$(mktemp /tmp/hy2.XXXXXX)" || return 1
@@ -73,12 +110,7 @@ download_panel() {
         wget -qO "${tmp_file}" "${GITHUB_RAW_URL}/hy2.sh" >/dev/null 2>&1 || true
     fi
 
-    if [[ ! -s "${tmp_file}" ]]; then
-        rm -f "${tmp_file}"
-        return 1
-    fi
-
-    if ! head -n 1 "${tmp_file}" | grep -q '^#!/bin/bash'; then
+    if ! verify_downloaded_panel "${tmp_file}"; then
         rm -f "${tmp_file}"
         return 1
     fi
@@ -94,6 +126,7 @@ echo -e "${_green}=====================================================${_plain}
 
 # 1. 检查 root 权限
 require_root
+preflight_check
 
 # 2. 安装基础依赖
 PKG_MANAGER="$(detect_pkg_manager || true)"
