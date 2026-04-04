@@ -149,6 +149,7 @@ restore_runtime_files() {
     if [[ -f "${HY2_BACKUP_DIR}/meta.info.bak" ]]; then
         cp -f "${HY2_BACKUP_DIR}/meta.info.bak" "${HY2_META_FILE}" || true
     fi
+    set_config_dir_permissions
     if [[ -f "${HY2_CONF_FILE}" ]]; then
         set_server_config_permissions
     fi
@@ -269,6 +270,15 @@ masquerade:
     url: $(yaml_single_quote "${masquerade_url}")
     rewriteHost: true
 EOF
+}
+
+set_config_dir_permissions() {
+    if id hysteria >/dev/null 2>&1; then
+        chown root:hysteria "${HY2_CONF_DIR}" >/dev/null 2>&1 || true
+        chmod 750 "${HY2_CONF_DIR}" >/dev/null 2>&1 || true
+    else
+        chmod 755 "${HY2_CONF_DIR}" >/dev/null 2>&1 || true
+    fi
 }
 
 set_server_config_permissions() {
@@ -560,7 +570,7 @@ config_hy2() {
         sleep 2
         return 1
     fi
-    chmod 700 "${HY2_CONF_DIR}" >/dev/null 2>&1 || true
+    set_config_dir_permissions
     if ! backup_runtime_files; then
         err "备份当前配置失败，已中止以避免覆盖现有配置。"
         sleep 2
@@ -1025,6 +1035,7 @@ restore_latest_manual_backup() {
     cp -f "${latest_dir}/meta.info" "${HY2_META_FILE}" 2>/dev/null || true
     cp -f "${latest_dir}/server.crt" "${HY2_CONF_DIR}/server.crt" 2>/dev/null || true
     cp -f "${latest_dir}/server.key" "${HY2_CONF_DIR}/server.key" 2>/dev/null || true
+    set_config_dir_permissions
     set_server_config_permissions
     chmod 600 "${HY2_META_FILE}" 2>/dev/null || true
     chmod 600 "${HY2_CONF_DIR}/server.key" 2>/dev/null || true
