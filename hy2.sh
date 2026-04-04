@@ -936,6 +936,80 @@ show_latest_diagnostics_report() {
     wait_return
 }
 
+create_manual_backup() {
+    local ts backup_dir
+    ts="$(date '+%Y%m%d-%H%M%S')"
+    backup_dir="${HY2_BACKUP_DIR}/manual-${ts}"
+    if ! mkdir -p "${backup_dir}"; then
+        err "创建备份目录失败: ${backup_dir}"
+        return 1
+    fi
+    cp -f "${HY2_CONF_FILE}" "${backup_dir}/config.yaml" 2>/dev/null || true
+    cp -f "${HY2_META_FILE}" "${backup_dir}/meta.info" 2>/dev/null || true
+    cp -f "${HY2_CONF_DIR}/server.crt" "${backup_dir}/server.crt" 2>/dev/null || true
+    cp -f "${HY2_CONF_DIR}/server.key" "${backup_dir}/server.key" 2>/dev/null || true
+    ok "手动备份完成: ${backup_dir}"
+    return 0
+}
+
+restore_latest_manual_backup() {
+    local latest_dir
+    latest_dir="$(ls -1dt "${HY2_BACKUP_DIR}"/manual-* 2>/dev/null | head -n 1 || true)"
+    if [[ -z "${latest_dir}" || ! -d "${latest_dir}" ]]; then
+        err "未找到可恢复的手动备份。"
+        return 1
+    fi
+
+    cp -f "${latest_dir}/config.yaml" "${HY2_CONF_FILE}" 2>/dev/null || true
+    cp -f "${latest_dir}/meta.info" "${HY2_META_FILE}" 2>/dev/null || true
+    cp -f "${latest_dir}/server.crt" "${HY2_CONF_DIR}/server.crt" 2>/dev/null || true
+    cp -f "${latest_dir}/server.key" "${HY2_CONF_DIR}/server.key" 2>/dev/null || true
+    chmod 600 "${HY2_CONF_FILE}" "${HY2_META_FILE}" 2>/dev/null || true
+    chmod 600 "${HY2_CONF_DIR}/server.key" 2>/dev/null || true
+    chmod 644 "${HY2_CONF_DIR}/server.crt" 2>/dev/null || true
+
+    if systemctl restart "${HY2_SERVICE}" >/dev/null 2>&1; then
+        ok "已恢复最近备份并重启服务: ${latest_dir}"
+    else
+        err "已恢复文件，但服务重启失败，请查看日志。"
+    fi
+    return 0
+}
+
+show_backup_restore_menu() {
+    while true; do
+        clear
+        print_line
+        echo -e "           ${_green}--- 配置备份与恢复 ---${_plain}"
+        print_line
+        echo -e "    (1) 创建手动备份"
+        echo -e "    (2) 恢复最近手动备份"
+        echo -e "    (3) 查看手动备份列表"
+        echo -e "    (0) 返回主菜单"
+        print_line
+        read -p " => 请选择操作 [0-3]: " action
+
+        case "${action}" in
+            1)
+                create_manual_backup
+                sleep 1
+                ;;
+            2)
+                restore_latest_manual_backup
+                sleep 2
+                ;;
+            3)
+                echo -e "${_green}[备份列表]${_plain}"
+                ls -1dt "${HY2_BACKUP_DIR}"/manual-* 2>/dev/null || echo "(空)"
+                print_line
+                wait_return
+                ;;
+            0) return 0 ;;
+            *) err "输入错误"; sleep 1 ;;
+        esac
+    done
+}
+
 # --- 5. 主菜单系统 (高兼容极客版) ---
 main_menu() {
     while true; do
@@ -971,10 +1045,11 @@ main_menu() {
         echo -e "    (8) [S] 查看 Sing-box 完整模板"
         echo -e "    (9) [D] 一键环境诊断"
         echo -e "    (10) [R] 查看最近诊断报告"
+        echo -e "    (11) [B] 配置备份与恢复"
         echo -e "    (0) [x] 退出面板"
         print_line
         
-        read -p " => 请选择操作 [0-10]: " menu_num
+        read -p " => 请选择操作 [0-11]: " menu_num
         
         case "${menu_num}" in
             1) install_hy2_core; sleep 2 ;;
@@ -999,6 +1074,7 @@ main_menu() {
             8) show_singbox_template ;;
             9) show_diagnostics ;;
             10) show_latest_diagnostics_report ;;
+            11) show_backup_restore_menu ;;
             0) exit 0 ;;
             *) err "输入错误"; sleep 1 ;;
         esac
