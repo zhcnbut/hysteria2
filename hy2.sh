@@ -25,6 +25,7 @@ DEFAULT_MASQUERADE_URL="https://bing.com"
 DEFAULT_SELF_SNI="bing.com"
 DEFAULT_UP_MBPS=20
 DEFAULT_DOWN_MBPS=100
+SELF_SNI_PRESETS=("bing.com" "www.cloudflare.com" "www.apple.com" "www.microsoft.com" "www.amazon.com")
 
 msg() { echo -e "${_blue}[信息]${_plain} $1"; }
 ok() { echo -e "${_green}[成功]${_plain} $1"; }
@@ -351,6 +352,37 @@ http:
 EOF
 }
 
+pick_self_signed_sni() {
+    local pick custom_sni
+    PICKED_SNI=""
+    echo -e " [*] 请选择自签 SNI 预设域名："
+    echo -e "     (1) ${SELF_SNI_PRESETS[0]} (默认)"
+    echo -e "     (2) ${SELF_SNI_PRESETS[1]}"
+    echo -e "     (3) ${SELF_SNI_PRESETS[2]}"
+    echo -e "     (4) ${SELF_SNI_PRESETS[3]}"
+    echo -e "     (5) ${SELF_SNI_PRESETS[4]}"
+    echo -e "     (0) 手动输入域名"
+    read -p " [*] 请选择 [0-5] (默认 1): " pick
+    [[ -z "${pick}" ]] && pick=1
+
+    case "${pick}" in
+        1) PICKED_SNI="${SELF_SNI_PRESETS[0]}" ;;
+        2) PICKED_SNI="${SELF_SNI_PRESETS[1]}" ;;
+        3) PICKED_SNI="${SELF_SNI_PRESETS[2]}" ;;
+        4) PICKED_SNI="${SELF_SNI_PRESETS[3]}" ;;
+        5) PICKED_SNI="${SELF_SNI_PRESETS[4]}" ;;
+        0)
+            read -p " [*] 请输入用于伪装的 SNI 域名 (默认 ${DEFAULT_SELF_SNI}): " custom_sni
+            [[ -z "${custom_sni}" ]] && custom_sni="${DEFAULT_SELF_SNI}"
+            PICKED_SNI="${custom_sni}"
+            ;;
+        *)
+            err "输入无效，已使用默认 SNI: ${DEFAULT_SELF_SNI}"
+            PICKED_SNI="${DEFAULT_SELF_SNI}"
+            ;;
+    esac
+}
+
 service_control_menu() {
     while true; do
         clear
@@ -537,8 +569,8 @@ config_hy2() {
 
     else
         msg "正在生成高强度自签名证书..."
-        read -p " [*] 请输入用于伪装的 SNI 域名 (默认 ${DEFAULT_SELF_SNI}): " sni
-        [[ -z "${sni}" ]] && sni="${DEFAULT_SELF_SNI}"
+        pick_self_signed_sni
+        sni="${PICKED_SNI}"
         if ! is_valid_domain "${sni}"; then
             err "SNI 域名格式无效，请输入有效域名。"
             sleep 2
