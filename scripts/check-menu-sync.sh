@@ -19,17 +19,17 @@ assert_contains() {
 }
 
 assert_contains "hy2.sh" "=> 请选择操作 [0-11]:" "hy2.sh menu range mismatch"
-assert_contains "hy2.sh" "(7) [?] 查看常用指令速查" "hy2.sh menu item 7 missing"
-assert_contains "hy2.sh" "(8) [S] 查看 Sing-box 完整模板" "hy2.sh menu item 8 missing"
-assert_contains "hy2.sh" "(9) [D] 一键环境诊断" "hy2.sh menu item 9 missing"
-assert_contains "hy2.sh" "(10) [R] 查看最近诊断报告" "hy2.sh menu item 10 missing"
-assert_contains "hy2.sh" "(11) [B] 配置备份与恢复" "hy2.sh menu item 11 missing"
+assert_contains "hy2.sh" "(7) 查看常用指令速查" "hy2.sh menu item 7 missing"
+assert_contains "hy2.sh" "(8) 查看 Sing-box 完整模板" "hy2.sh menu item 8 missing"
+assert_contains "hy2.sh" "(9) 一键环境诊断" "hy2.sh menu item 9 missing"
+assert_contains "hy2.sh" "(10) 查看最近诊断报告" "hy2.sh menu item 10 missing"
+assert_contains "hy2.sh" "(11) 配置备份与恢复" "hy2.sh menu item 11 missing"
 
 assert_contains "README.md" "➡️ 请选择操作 [0-11]:" "README menu range mismatch"
-assert_contains "README.md" "(7) ❓ 查看常用指令速查" "README menu item 7 missing"
-assert_contains "README.md" "(8) 🧩 查看 Sing-box 完整模板" "README menu item 8 missing"
-assert_contains "README.md" "(9) 🩺 一键环境诊断" "README menu item 9 missing"
-assert_contains "README.md" "(10) 📄 查看最近诊断报告" "README menu item 10 missing"
-assert_contains "README.md" "(11) 💾 配置备份与恢复" "README menu item 11 missing"
+assert_contains "README.md" "(7) 查看常用指令速查" "README menu item 7 missing"
+assert_contains "README.md" "(8) 查看 Sing-box 完整模板" "README menu item 8 missing"
+assert_contains "README.md" "(9) 一键环境诊断" "README menu item 9 missing"
+assert_contains "README.md" "(10) 查看最近诊断报告" "README menu item 10 missing"
+assert_contains "README.md" "(11) 配置备份与恢复" "README menu item 11 missing"
 
 echo "[OK] Menu and README preview are in sync."
