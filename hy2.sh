@@ -18,6 +18,7 @@ HY2_CONF_FILE="${HY2_CONF_DIR}/config.yaml"
 HY2_META_FILE="${HY2_CONF_DIR}/meta.info"
 HY2_SERVICE="hysteria-server.service"
 HY2_BACKUP_DIR="${HY2_CONF_DIR}/backup"
+HY2_DIAG_DIR="/tmp"
 DEFAULT_PORT=443
 DEFAULT_MASQUERADE_URL="https://bing.com"
 DEFAULT_SELF_SNI="bing.com"
@@ -769,6 +770,17 @@ show_diagnostics() {
     local warn_count=0
     local fail_count=0
     local line_status
+    local now_ts diag_file summary_plain
+    now_ts="$(date '+%Y%m%d-%H%M%S')"
+    diag_file="${HY2_DIAG_DIR}/hy2-diagnose-${now_ts}.log"
+    : > "${diag_file}" 2>/dev/null || diag_file=""
+
+    diag_log() {
+        local text="$1"
+        if [[ -n "${diag_file}" ]]; then
+            echo -e "${text}" >> "${diag_file}"
+        fi
+    }
 
     print_result() {
         local level="$1"
@@ -776,14 +788,17 @@ show_diagnostics() {
         case "${level}" in
             OK)
                 echo -e "${_green}[OK]${_plain} ${text}"
+                diag_log "[OK] ${text}"
                 ok_count=$((ok_count + 1))
                 ;;
             WARN)
                 echo -e "${_yellow}[WARN]${_plain} ${text}"
+                diag_log "[WARN] ${text}"
                 warn_count=$((warn_count + 1))
                 ;;
             FAIL)
                 echo -e "${_red}[FAIL]${_plain} ${text}"
+                diag_log "[FAIL] ${text}"
                 fail_count=$((fail_count + 1))
                 ;;
         esac
@@ -793,6 +808,12 @@ show_diagnostics() {
     print_line
     echo -e "             ${_green}--- 一键环境诊断 ---${_plain}"
     print_line
+    if [[ -n "${diag_file}" ]]; then
+        diag_log "=== Hysteria2-LuoPo Diagnose @ ${now_ts} ==="
+        diag_log "config_file=${HY2_CONF_FILE}"
+        diag_log "meta_file=${HY2_META_FILE}"
+        diag_log "service=${HY2_SERVICE}"
+    fi
 
     if ensure_hy2_core_installed; then
         print_result "OK" "已检测到 Hysteria2 内核。"
@@ -877,12 +898,21 @@ show_diagnostics() {
     print_line
     if (( fail_count > 0 )); then
         line_status="${_red}诊断结果: ${ok_count} OK / ${warn_count} WARN / ${fail_count} FAIL${_plain}"
+        summary_plain="诊断结果: ${ok_count} OK / ${warn_count} WARN / ${fail_count} FAIL"
     elif (( warn_count > 0 )); then
         line_status="${_yellow}诊断结果: ${ok_count} OK / ${warn_count} WARN / 0 FAIL${_plain}"
+        summary_plain="诊断结果: ${ok_count} OK / ${warn_count} WARN / 0 FAIL"
     else
         line_status="${_green}诊断结果: ${ok_count} OK / 0 WARN / 0 FAIL${_plain}"
+        summary_plain="诊断结果: ${ok_count} OK / 0 WARN / 0 FAIL"
     fi
     echo -e "${line_status}"
+    diag_log "${summary_plain}"
+    if [[ -n "${diag_file}" ]]; then
+        echo -e "${_blue}[信息]${_plain} 诊断报告已导出: ${diag_file}"
+    else
+        echo -e "${_yellow}[提示]${_plain} 诊断报告导出失败，仅显示终端结果。"
+    fi
     print_line
     wait_return
 }
