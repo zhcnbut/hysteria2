@@ -14,6 +14,7 @@ check_cmd() {
 
 check_cmd bash
 check_cmd shellcheck
+check_cmd grep
 
 echo "[INFO] Running bash syntax checks..."
 bash -n hy2.sh
@@ -21,5 +22,8 @@ bash -n install.sh
 
 echo "[INFO] Running shellcheck..."
 shellcheck -x hy2.sh install.sh
+
+echo "[INFO] Checking menu/README consistency..."
+bash scripts/check-menu-sync.sh
 
 echo "[OK] All checks passed."

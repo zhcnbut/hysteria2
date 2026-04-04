@@ -92,6 +92,7 @@ chmod +x scripts/verify.sh
 
 - `bash -n` 语法检查
 - `shellcheck` 静态检查
+- 菜单与 README 预览一致性检查（防止文档漂移）
 
 ## ✅ VPS 冒烟测试（5 分钟）
 

@@ -9,6 +9,7 @@ on:
       - 'hy2.sh'
       - 'install.sh'
       - 'scripts/verify.sh'
+      - 'scripts/check-menu-sync.sh'
       - '.github/workflows/lint.yml'
 
 jobs:
@@ -22,7 +23,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y shellcheck
 
       - name: Make verify script executable
-        run: chmod +x scripts/verify.sh
+        run: chmod +x scripts/verify.sh scripts/check-menu-sync.sh
 
       - name: Run verification
         run: ./scripts/verify.sh
