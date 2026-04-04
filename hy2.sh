@@ -18,11 +18,17 @@ HY2_CONF_FILE="${HY2_CONF_DIR}/config.yaml"
 HY2_META_FILE="${HY2_CONF_DIR}/meta.info"
 HY2_SERVICE="hysteria-server.service"
 HY2_BACKUP_DIR="${HY2_CONF_DIR}/backup"
+DEFAULT_PORT=443
+DEFAULT_MASQUERADE_URL="https://bing.com"
+DEFAULT_SELF_SNI="bing.com"
+DEFAULT_UP_MBPS=20
+DEFAULT_DOWN_MBPS=100
 
 msg() { echo -e "${_blue}[信息]${_plain} $1"; }
 ok() { echo -e "${_green}[成功]${_plain} $1"; }
 err() { echo -e "${_red}[错误]${_plain} $1"; }
 print_line() { echo -e "${_blue}=====================================================${_plain}"; }
+wait_return() { read -n 1 -s -r -p "按任意键返回主菜单..."; }
 
 require_root() {
     if [[ "${EUID}" -ne 0 ]]; then
@@ -188,8 +194,8 @@ read_meta_info() {
     if [[ "${insecure}" != "true" && "${insecure}" != "false" ]]; then
         return 1
     fi
-    [[ -z "${up_mbps}" ]] && up_mbps="20"
-    [[ -z "${down_mbps}" ]] && down_mbps="100"
+    [[ -z "${up_mbps}" ]] && up_mbps="${DEFAULT_UP_MBPS}"
+    [[ -z "${down_mbps}" ]] && down_mbps="${DEFAULT_DOWN_MBPS}"
     if ! [[ "${up_mbps}" =~ ^[0-9]+$ ]] || ! [[ "${down_mbps}" =~ ^[0-9]+$ ]]; then
         return 1
     fi
@@ -197,6 +203,150 @@ read_meta_info() {
         return 1
     fi
     return 0
+}
+
+require_meta_info() {
+    if [[ ! -f "${HY2_META_FILE}" ]]; then
+        err "未找到节点元数据，请先执行 (2) 配置 Hysteria2 节点！"
+        sleep 2
+        return 1
+    fi
+    if ! read_meta_info; then
+        err "节点元数据损坏或缺失，请重新执行 (2) 配置节点。"
+        sleep 2
+        return 1
+    fi
+    return 0
+}
+
+write_ca_config() {
+    local port="$1"
+    local domain="$2"
+    local email="$3"
+    local password="$4"
+    local masquerade_url="$5"
+
+    cat << EOF > "${HY2_CONF_FILE}"
+listen: :${port}
+acme:
+  domains:
+    - $(yaml_single_quote "${domain}")
+  email: $(yaml_single_quote "${email}")
+auth:
+  type: password
+  password: $(yaml_single_quote "${password}")
+masquerade:
+  type: proxy
+  proxy:
+    url: $(yaml_single_quote "${masquerade_url}")
+    rewriteHost: true
+EOF
+}
+
+write_self_signed_config() {
+    local port="$1"
+    local password="$2"
+    local masquerade_url="$3"
+
+    cat << EOF > "${HY2_CONF_FILE}"
+listen: :${port}
+tls:
+  cert: ${HY2_CONF_DIR}/server.crt
+  key: ${HY2_CONF_DIR}/server.key
+auth:
+  type: password
+  password: $(yaml_single_quote "${password}")
+masquerade:
+  type: proxy
+  proxy:
+    url: $(yaml_single_quote "${masquerade_url}")
+    rewriteHost: true
+EOF
+}
+
+write_meta_info() {
+    local ip="$1"
+    local port="$2"
+    local password="$3"
+    local sni="$4"
+    local insecure="$5"
+    local up_mbps="$6"
+    local down_mbps="$7"
+
+    cat > "${HY2_META_FILE}" << EOF
+ip=${ip}
+port=${port}
+password=${password}
+sni=${sni}
+insecure=${insecure}
+up_mbps=${up_mbps}
+down_mbps=${down_mbps}
+EOF
+}
+
+restart_service_with_rollback() {
+    if systemctl restart "${HY2_SERVICE}"; then
+        return 0
+    fi
+    err "重启服务失败，正在尝试自动回滚到上一版配置..."
+    if restore_runtime_files && systemctl restart "${HY2_SERVICE}"; then
+        err "已回滚到上一版配置，本次变更未生效。"
+    else
+        err "自动回滚失败，请手动检查 ${HY2_CONF_FILE} 和服务日志。"
+    fi
+    return 1
+}
+
+render_singbox_outbound_snippet() {
+    local json_ip="$1"
+    local port="$2"
+    local up_mbps="$3"
+    local down_mbps="$4"
+    local json_password="$5"
+    local json_sni="$6"
+    local insecure="$7"
+
+    cat << EOF
+{
+  "type": "hysteria2",
+  "tag": "proxy",
+  "server": "${json_ip}",
+  "server_port": ${port},
+  "up_mbps": ${up_mbps},
+  "down_mbps": ${down_mbps},
+  "password": "${json_password}",
+  "tls": {
+    "enabled": true,
+    "server_name": "${json_sni}",
+    "insecure": ${insecure}
+  }
+}
+EOF
+}
+
+render_v2rayn_yaml_snippet() {
+    local ip="$1"
+    local port="$2"
+    local password="$3"
+    local up_mbps="$4"
+    local down_mbps="$5"
+    local sni="$6"
+    local insecure="$7"
+
+    cat << EOF
+server: ${ip}:${port}
+auth: ${password}
+bandwidth:
+  up: ${up_mbps} mbps
+  down: ${down_mbps} mbps
+tls:
+  sni: ${sni}
+  insecure: ${insecure}
+socks5:
+  listen: 127.0.0.1:1080
+http:
+  listen: 127.0.0.1:8080
+EOF
 }
 
 service_control_menu() {
@@ -305,8 +455,8 @@ config_hy2() {
     echo -e "               ${_green}--- Hysteria2 节点配置 ---${_plain}"
     print_line
     
-    read -p " => 请设置监听端口 (默认 443): " port
-    [[ -z "${port}" ]] && port=443
+    read -p " => 请设置监听端口 (默认 ${DEFAULT_PORT}): " port
+    [[ -z "${port}" ]] && port="${DEFAULT_PORT}"
     if ! is_valid_port "${port}"; then
         err "端口无效，请输入 1-65535 的整数。"
         sleep 2
@@ -317,24 +467,24 @@ config_hy2() {
     read -p " => 请设置认证密码 (默认随机: ${default_pwd}): " password
     [[ -z "${password}" ]] && password="${default_pwd}"
 
-    read -p " => 请设置伪装网址 (默认 https://bing.com): " masquerade_url
-    [[ -z "${masquerade_url}" ]] && masquerade_url="https://bing.com"
+    read -p " => 请设置伪装网址 (默认 ${DEFAULT_MASQUERADE_URL}): " masquerade_url
+    [[ -z "${masquerade_url}" ]] && masquerade_url="${DEFAULT_MASQUERADE_URL}"
     if ! is_valid_url "${masquerade_url}"; then
         err "伪装网址格式无效，必须以 http:// 或 https:// 开头。"
         sleep 2
         return 1
     fi
 
-    read -p " => 请设置上行带宽 Mbps (默认 20): " up_mbps
-    [[ -z "${up_mbps}" ]] && up_mbps=20
+    read -p " => 请设置上行带宽 Mbps (默认 ${DEFAULT_UP_MBPS}): " up_mbps
+    [[ -z "${up_mbps}" ]] && up_mbps="${DEFAULT_UP_MBPS}"
     if ! [[ "${up_mbps}" =~ ^[0-9]+$ ]] || (( up_mbps < 1 )); then
         err "上行带宽无效，请输入大于 0 的整数。"
         sleep 2
         return 1
     fi
 
-    read -p " => 请设置下行带宽 Mbps (默认 100): " down_mbps
-    [[ -z "${down_mbps}" ]] && down_mbps=100
+    read -p " => 请设置下行带宽 Mbps (默认 ${DEFAULT_DOWN_MBPS}): " down_mbps
+    [[ -z "${down_mbps}" ]] && down_mbps="${DEFAULT_DOWN_MBPS}"
     if ! [[ "${down_mbps}" =~ ^[0-9]+$ ]] || (( down_mbps < 1 )); then
         err "下行带宽无效，请输入大于 0 的整数。"
         sleep 2
@@ -378,29 +528,15 @@ config_hy2() {
             return 1
         fi
         
-        cat << EOF > ${HY2_CONF_FILE}
-listen: :${port}
-acme:
-  domains:
-    - $(yaml_single_quote "${domain}")
-  email: $(yaml_single_quote "${email}")
-auth:
-  type: password
-  password: $(yaml_single_quote "${password}")
-masquerade:
-  type: proxy
-  proxy:
-    url: $(yaml_single_quote "${masquerade_url}")
-    rewriteHost: true
-EOF
+        write_ca_config "${port}" "${domain}" "${email}" "${password}" "${masquerade_url}"
         chmod 600 "${HY2_CONF_FILE}" >/dev/null 2>&1 || true
         local sni="${domain}"
         local insecure="false"
 
     else
         msg "正在生成高强度自签名证书..."
-        read -p " [*] 请输入用于伪装的 SNI 域名 (默认 bing.com): " sni
-        [[ -z "${sni}" ]] && sni="bing.com"
+        read -p " [*] 请输入用于伪装的 SNI 域名 (默认 ${DEFAULT_SELF_SNI}): " sni
+        [[ -z "${sni}" ]] && sni="${DEFAULT_SELF_SNI}"
         if ! is_valid_domain "${sni}"; then
             err "SNI 域名格式无效，请输入有效域名。"
             sleep 2
@@ -421,20 +557,7 @@ EOF
         chmod 600 "${HY2_CONF_DIR}/server.key" >/dev/null 2>&1 || true
         chmod 644 "${HY2_CONF_DIR}/server.crt" >/dev/null 2>&1 || true
         
-        cat << EOF > ${HY2_CONF_FILE}
-listen: :${port}
-tls:
-  cert: ${HY2_CONF_DIR}/server.crt
-  key: ${HY2_CONF_DIR}/server.key
-auth:
-  type: password
-  password: $(yaml_single_quote "${password}")
-masquerade:
-  type: proxy
-  proxy:
-    url: $(yaml_single_quote "${masquerade_url}")
-    rewriteHost: true
-EOF
+        write_self_signed_config "${port}" "${password}" "${masquerade_url}"
         chmod 600 "${HY2_CONF_FILE}" >/dev/null 2>&1 || true
         local insecure="true"
     fi
@@ -446,25 +569,11 @@ EOF
         return 1
     fi
 
-    cat > "${HY2_META_FILE}" << EOF
-ip=${SERVER_IP}
-port=${port}
-password=${password}
-sni=${sni}
-insecure=${insecure}
-up_mbps=${up_mbps}
-down_mbps=${down_mbps}
-EOF
+    write_meta_info "${SERVER_IP}" "${port}" "${password}" "${sni}" "${insecure}" "${up_mbps}" "${down_mbps}"
     chmod 600 "${HY2_META_FILE}" >/dev/null 2>&1 || true
 
     msg "正在重启 Hysteria2 服务以应用新配置..."
-    if ! systemctl restart "${HY2_SERVICE}"; then
-        err "重启服务失败，正在尝试自动回滚到上一版配置..."
-        if restore_runtime_files && systemctl restart "${HY2_SERVICE}"; then
-            err "已回滚到上一版配置，本次变更未生效。"
-        else
-            err "自动回滚失败，请手动检查 ${HY2_CONF_FILE} 和服务日志。"
-        fi
+    if ! restart_service_with_rollback; then
         sleep 2
         return 1
     fi
@@ -479,15 +588,7 @@ EOF
 
 # --- 4. 客户端订阅与展示模块 ---
 show_info() {
-    if [[ ! -f ${HY2_META_FILE} ]]; then
-        err "未找到节点元数据，请先执行 (2) 配置 Hysteria2 节点！"
-        sleep 2
-        return
-    fi
-    
-    if ! read_meta_info; then
-        err "节点元数据损坏或缺失，请重新执行 (2) 配置节点。"
-        sleep 2
+    if ! require_meta_info; then
         return
     fi
 
@@ -518,36 +619,12 @@ show_info() {
     print_line
     
     echo -e "${_green}[JSON] Sing-box (Android/iOS) 专属 Outbound 模块:${_plain}"
-    echo -e "{
-  \"type\": \"hysteria2\",
-  \"tag\": \"proxy\",
-  \"server\": \"${json_ip}\",
-  \"server_port\": ${port},
-  \"up_mbps\": ${up_mbps},
-  \"down_mbps\": ${down_mbps},
-  \"password\": \"${json_password}\",
-  \"tls\": {
-    \"enabled\": true,
-    \"server_name\": \"${json_sni}\",
-    \"insecure\": ${insecure}
-  }
-}"
+    render_singbox_outbound_snippet "${json_ip}" "${port}" "${up_mbps}" "${down_mbps}" "${json_password}" "${json_sni}" "${insecure}"
     print_line
     echo -e "${_green}[YAML] v2rayN / nekoray 自定义配置片段:${_plain}"
-    echo -e "server: ${ip}:${port}
-auth: ${password}
-bandwidth:
-  up: ${up_mbps} mbps
-  down: ${down_mbps} mbps
-tls:
-  sni: ${sni}
-  insecure: ${insecure}
-socks5:
-  listen: 127.0.0.1:1080
-http:
-  listen: 127.0.0.1:8080"
+    render_v2rayn_yaml_snippet "${ip}" "${port}" "${password}" "${up_mbps}" "${down_mbps}" "${sni}" "${insecure}"
     print_line
-    read -n 1 -s -r -p "按任意键返回主菜单..."
+    wait_return
 }
 
 show_cheatsheet() {
@@ -573,18 +650,11 @@ show_cheatsheet() {
     echo -e "服务配置: ${HY2_CONF_FILE}"
     echo -e "元数据  : ${HY2_META_FILE}"
     print_line
-    read -n 1 -s -r -p "按任意键返回主菜单..."
+    wait_return
 }
 
 show_singbox_template() {
-    if [[ ! -f ${HY2_META_FILE} ]]; then
-        err "未找到节点元数据，请先执行 (2) 配置 Hysteria2 节点！"
-        sleep 2
-        return
-    fi
-    if ! read_meta_info; then
-        err "节点元数据损坏或缺失，请重新执行 (2) 配置节点。"
-        sleep 2
+    if ! require_meta_info; then
         return
     fi
 
@@ -691,7 +761,7 @@ show_singbox_template() {
   }
 }"
     print_line
-    read -n 1 -s -r -p "按任意键返回主菜单..."
+    wait_return
 }
 
 show_diagnostics() {
@@ -814,7 +884,7 @@ show_diagnostics() {
     fi
     echo -e "${line_status}"
     print_line
-    read -n 1 -s -r -p "按任意键返回主菜单..."
+    wait_return
 }
 
 # --- 5. 主菜单系统 (高兼容极客版) ---
