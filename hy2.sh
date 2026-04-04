@@ -694,6 +694,129 @@ show_singbox_template() {
     read -n 1 -s -r -p "按任意键返回主菜单..."
 }
 
+show_diagnostics() {
+    local ok_count=0
+    local warn_count=0
+    local fail_count=0
+    local line_status
+
+    print_result() {
+        local level="$1"
+        local text="$2"
+        case "${level}" in
+            OK)
+                echo -e "${_green}[OK]${_plain} ${text}"
+                ok_count=$((ok_count + 1))
+                ;;
+            WARN)
+                echo -e "${_yellow}[WARN]${_plain} ${text}"
+                warn_count=$((warn_count + 1))
+                ;;
+            FAIL)
+                echo -e "${_red}[FAIL]${_plain} ${text}"
+                fail_count=$((fail_count + 1))
+                ;;
+        esac
+    }
+
+    clear
+    print_line
+    echo -e "             ${_green}--- 一键环境诊断 ---${_plain}"
+    print_line
+
+    if ensure_hy2_core_installed; then
+        print_result "OK" "已检测到 Hysteria2 内核。"
+    else
+        print_result "FAIL" "未检测到 Hysteria2 内核。请先执行菜单 (1)。"
+    fi
+
+    if systemctl is-enabled "${HY2_SERVICE}" >/dev/null 2>&1; then
+        print_result "OK" "服务已设置开机自启。"
+    else
+        print_result "WARN" "服务未设置开机自启，可执行: systemctl enable ${HY2_SERVICE}"
+    fi
+
+    if systemctl is-active --quiet "${HY2_SERVICE}"; then
+        print_result "OK" "服务当前状态: 运行中。"
+    else
+        print_result "WARN" "服务当前未运行，可执行菜单 (4) 启动/重启。"
+    fi
+
+    if [[ -f "${HY2_CONF_FILE}" ]]; then
+        print_result "OK" "配置文件存在: ${HY2_CONF_FILE}"
+    else
+        print_result "FAIL" "配置文件不存在: ${HY2_CONF_FILE}"
+    fi
+
+    if [[ -f "${HY2_META_FILE}" ]] && read_meta_info; then
+        print_result "OK" "节点元数据存在且可解析。"
+    else
+        print_result "WARN" "节点元数据缺失或损坏，建议重新执行菜单 (2)。"
+    fi
+
+    if [[ -f "${HY2_CONF_FILE}" ]]; then
+        local listen_port
+        listen_port="$(sed -n 's/^listen:[[:space:]]*:\([0-9]\+\).*/\1/p' "${HY2_CONF_FILE}" | head -n 1)"
+        if [[ -n "${listen_port}" ]]; then
+            print_result "OK" "监听端口配置为: ${listen_port}"
+            if command -v ss >/dev/null 2>&1; then
+                if ss -lun 2>/dev/null | grep -qE "[\:\.]${listen_port}[[:space:]]"; then
+                    print_result "OK" "检测到 UDP 端口 ${listen_port} 正在监听。"
+                else
+                    print_result "WARN" "未检测到 UDP 端口 ${listen_port} 监听，可能服务未启动。"
+                fi
+            else
+                print_result "WARN" "系统未安装 ss，跳过端口监听检查。"
+            fi
+        else
+            print_result "WARN" "未能从配置中解析 listen 端口。"
+        fi
+
+        if grep -q '^tls:' "${HY2_CONF_FILE}"; then
+            local cert_path key_path
+            cert_path="$(sed -n 's/^[[:space:]]*cert:[[:space:]]*//p' "${HY2_CONF_FILE}" | head -n 1)"
+            key_path="$(sed -n 's/^[[:space:]]*key:[[:space:]]*//p' "${HY2_CONF_FILE}" | head -n 1)"
+            if [[ -n "${cert_path}" && -f "${cert_path}" ]]; then
+                print_result "OK" "自签证书文件存在: ${cert_path}"
+            else
+                print_result "FAIL" "自签证书文件缺失。"
+            fi
+            if [[ -n "${key_path}" && -f "${key_path}" ]]; then
+                print_result "OK" "自签私钥文件存在: ${key_path}"
+            else
+                print_result "FAIL" "自签私钥文件缺失。"
+            fi
+        elif grep -q '^acme:' "${HY2_CONF_FILE}"; then
+            print_result "OK" "当前为 CA 证书模式。"
+        else
+            print_result "WARN" "未检测到 tls/acme 配置块，请确认配置正确。"
+        fi
+    fi
+
+    local probe_ip
+    probe_ip="$(fetch_server_ip)"
+    if [[ -n "${probe_ip}" ]]; then
+        print_result "OK" "公网 IP 探测成功: ${probe_ip}"
+        if [[ -n "${ip:-}" && "${ip}" != "${probe_ip}" ]]; then
+            print_result "WARN" "元数据 IP(${ip}) 与当前探测 IP(${probe_ip}) 不一致。"
+        fi
+    else
+        print_result "WARN" "公网 IP 探测失败，请检查网络连接。"
+    fi
+
+    print_line
+    if (( fail_count > 0 )); then
+        line_status="${_red}诊断结果: ${ok_count} OK / ${warn_count} WARN / ${fail_count} FAIL${_plain}"
+    elif (( warn_count > 0 )); then
+        line_status="${_yellow}诊断结果: ${ok_count} OK / ${warn_count} WARN / 0 FAIL${_plain}"
+    else
+        line_status="${_green}诊断结果: ${ok_count} OK / 0 WARN / 0 FAIL${_plain}"
+    fi
+    echo -e "${line_status}"
+    print_line
+    read -n 1 -s -r -p "按任意键返回主菜单..."
+}
+
 # --- 5. 主菜单系统 (高兼容极客版) ---
 main_menu() {
     while true; do
@@ -727,10 +850,11 @@ main_menu() {
         echo -e "    (6) [-] 完全卸载清理"
         echo -e "    (7) [?] 查看常用指令速查"
         echo -e "    (8) [S] 查看 Sing-box 完整模板"
+        echo -e "    (9) [D] 一键环境诊断"
         echo -e "    (0) [x] 退出面板"
         print_line
         
-        read -p " => 请选择操作 [0-8]: " menu_num
+        read -p " => 请选择操作 [0-9]: " menu_num
         
         case "${menu_num}" in
             1) install_hy2_core; sleep 2 ;;
@@ -753,6 +877,7 @@ main_menu() {
             6) uninstall_hy2 ;;
             7) show_cheatsheet ;;
             8) show_singbox_template ;;
+            9) show_diagnostics ;;
             0) exit 0 ;;
             *) err "输入错误"; sleep 1 ;;
         esac
