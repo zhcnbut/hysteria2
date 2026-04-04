@@ -273,8 +273,10 @@ EOF
 }
 
 set_config_dir_permissions() {
-    if id hysteria >/dev/null 2>&1; then
-        chown root:hysteria "${HY2_CONF_DIR}" >/dev/null 2>&1 || true
+    local run_user
+    run_user="$(get_service_run_user)"
+    if [[ "${run_user}" != "root" ]] && id "${run_user}" >/dev/null 2>&1; then
+        chown root:"${run_user}" "${HY2_CONF_DIR}" >/dev/null 2>&1 || true
         chmod 750 "${HY2_CONF_DIR}" >/dev/null 2>&1 || true
     else
         chmod 755 "${HY2_CONF_DIR}" >/dev/null 2>&1 || true
@@ -282,8 +284,10 @@ set_config_dir_permissions() {
 }
 
 set_server_config_permissions() {
-    if id hysteria >/dev/null 2>&1; then
-        chown root:hysteria "${HY2_CONF_FILE}" >/dev/null 2>&1 || true
+    local run_user
+    run_user="$(get_service_run_user)"
+    if [[ "${run_user}" != "root" ]] && id "${run_user}" >/dev/null 2>&1; then
+        chown root:"${run_user}" "${HY2_CONF_FILE}" >/dev/null 2>&1 || true
         chmod 640 "${HY2_CONF_FILE}" >/dev/null 2>&1 || true
     else
         chmod 644 "${HY2_CONF_FILE}" >/dev/null 2>&1 || true
@@ -308,6 +312,23 @@ insecure=${insecure}
 up_mbps=${up_mbps}
 down_mbps=${down_mbps}
 EOF
+}
+
+get_service_run_user() {
+    local run_user
+    run_user="$(systemctl show -p User --value "${HY2_SERVICE}" 2>/dev/null || true)"
+    [[ -z "${run_user}" ]] && run_user="root"
+    echo "${run_user}"
+}
+
+set_tls_file_permissions() {
+    local run_user
+    run_user="$(get_service_run_user)"
+    if [[ "${run_user}" != "root" ]] && id "${run_user}" >/dev/null 2>&1; then
+        chown "${run_user}:${run_user}" "${HY2_CONF_DIR}/server.key" "${HY2_CONF_DIR}/server.crt" >/dev/null 2>&1 || true
+    fi
+    chmod 600 "${HY2_CONF_DIR}/server.key" >/dev/null 2>&1 || true
+    chmod 644 "${HY2_CONF_DIR}/server.crt" >/dev/null 2>&1 || true
 }
 
 restart_service_with_rollback() {
@@ -615,11 +636,7 @@ config_hy2() {
             return 1
         fi
         
-        if id hysteria >/dev/null 2>&1; then
-            chown hysteria ${HY2_CONF_DIR}/server.key ${HY2_CONF_DIR}/server.crt || true
-        fi
-        chmod 600 "${HY2_CONF_DIR}/server.key" >/dev/null 2>&1 || true
-        chmod 644 "${HY2_CONF_DIR}/server.crt" >/dev/null 2>&1 || true
+        set_tls_file_permissions
         
         write_self_signed_config "${port}" "${password}" "${masquerade_url}"
         set_server_config_permissions
@@ -636,6 +653,7 @@ config_hy2() {
     write_meta_info "${SERVER_IP}" "${port}" "${password}" "${sni}" "${insecure}" "${up_mbps}" "${down_mbps}"
     chmod 600 "${HY2_META_FILE}" >/dev/null 2>&1 || true
 
+    msg "检测到服务运行用户: $(get_service_run_user)"
     msg "正在重启 Hysteria2 服务以应用新配置..."
     if ! restart_service_with_rollback; then
         sleep 2
