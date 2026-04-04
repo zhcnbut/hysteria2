@@ -164,6 +164,8 @@ read_meta_info() {
     password=""
     sni=""
     insecure=""
+    up_mbps=""
+    down_mbps=""
 
     while IFS='=' read -r key value; do
         case "${key}" in
@@ -172,6 +174,8 @@ read_meta_info() {
             password) password="${value}" ;;
             sni) sni="${value}" ;;
             insecure) insecure="${value}" ;;
+            up_mbps) up_mbps="${value}" ;;
+            down_mbps) down_mbps="${value}" ;;
         esac
     done < "${HY2_META_FILE}"
 
@@ -182,6 +186,14 @@ read_meta_info() {
         return 1
     fi
     if [[ "${insecure}" != "true" && "${insecure}" != "false" ]]; then
+        return 1
+    fi
+    [[ -z "${up_mbps}" ]] && up_mbps="20"
+    [[ -z "${down_mbps}" ]] && down_mbps="100"
+    if ! [[ "${up_mbps}" =~ ^[0-9]+$ ]] || ! [[ "${down_mbps}" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+    if (( up_mbps < 1 || down_mbps < 1 )); then
         return 1
     fi
     return 0
@@ -313,6 +325,22 @@ config_hy2() {
         return 1
     fi
 
+    read -p " => 请设置上行带宽 Mbps (默认 20): " up_mbps
+    [[ -z "${up_mbps}" ]] && up_mbps=20
+    if ! [[ "${up_mbps}" =~ ^[0-9]+$ ]] || (( up_mbps < 1 )); then
+        err "上行带宽无效，请输入大于 0 的整数。"
+        sleep 2
+        return 1
+    fi
+
+    read -p " => 请设置下行带宽 Mbps (默认 100): " down_mbps
+    [[ -z "${down_mbps}" ]] && down_mbps=100
+    if ! [[ "${down_mbps}" =~ ^[0-9]+$ ]] || (( down_mbps < 1 )); then
+        err "下行带宽无效，请输入大于 0 的整数。"
+        sleep 2
+        return 1
+    fi
+
     echo -e "\n[*] 请选择证书模式："
     echo -e "  (1) CA 域名证书 (推荐，需要提前将域名解析到本 VPS)"
     echo -e "  (2) 自签证书 (无需域名，直接使用 IP 连通)"
@@ -424,6 +452,8 @@ port=${port}
 password=${password}
 sni=${sni}
 insecure=${insecure}
+up_mbps=${up_mbps}
+down_mbps=${down_mbps}
 EOF
     chmod 600 "${HY2_META_FILE}" >/dev/null 2>&1 || true
 
@@ -470,6 +500,8 @@ show_info() {
     echo -e "  [*] 密码      : ${_yellow}${password}${_plain}"
     echo -e "  [*] SNI伪装   : ${_yellow}${sni}${_plain}"
     echo -e "  [*] 跳过证书  : ${_yellow}${insecure}${_plain} (自签必须为true)"
+    echo -e "  [*] 上行带宽  : ${_yellow}${up_mbps}${_plain} Mbps"
+    echo -e "  [*] 下行带宽  : ${_yellow}${down_mbps}${_plain} Mbps"
     print_line
 
     local enc_password enc_sni url_host json_ip json_password json_sni
@@ -491,8 +523,8 @@ show_info() {
   \"tag\": \"proxy\",
   \"server\": \"${json_ip}\",
   \"server_port\": ${port},
-  \"up_mbps\": 50,
-  \"down_mbps\": 200,
+  \"up_mbps\": ${up_mbps},
+  \"down_mbps\": ${down_mbps},
   \"password\": \"${json_password}\",
   \"tls\": {
     \"enabled\": true,
@@ -500,6 +532,20 @@ show_info() {
     \"insecure\": ${insecure}
   }
 }"
+    print_line
+    echo -e "${_green}[YAML] v2rayN / nekoray 自定义配置片段:${_plain}"
+    echo -e "server: ${ip}:${port}
+auth: ${password}
+bandwidth:
+  up: ${up_mbps} mbps
+  down: ${down_mbps} mbps
+tls:
+  sni: ${sni}
+  insecure: ${insecure}
+socks5:
+  listen: 127.0.0.1:1080
+http:
+  listen: 127.0.0.1:8080"
     print_line
     read -n 1 -s -r -p "按任意键返回主菜单..."
 }
