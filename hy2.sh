@@ -19,6 +19,7 @@ HY2_META_FILE="${HY2_CONF_DIR}/meta.info"
 HY2_SERVICE="hysteria-server.service"
 HY2_BACKUP_DIR="${HY2_CONF_DIR}/backup"
 HY2_DIAG_DIR="/tmp"
+HY2_DIAG_LATEST="${HY2_DIAG_DIR}/hy2-diagnose-latest.log"
 DEFAULT_PORT=443
 DEFAULT_MASQUERADE_URL="https://bing.com"
 DEFAULT_SELF_SNI="bing.com"
@@ -909,10 +910,28 @@ show_diagnostics() {
     echo -e "${line_status}"
     diag_log "${summary_plain}"
     if [[ -n "${diag_file}" ]]; then
+        cp -f "${diag_file}" "${HY2_DIAG_LATEST}" >/dev/null 2>&1 || true
         echo -e "${_blue}[信息]${_plain} 诊断报告已导出: ${diag_file}"
+        echo -e "${_blue}[信息]${_plain} 最新报告快捷路径: ${HY2_DIAG_LATEST}"
     else
         echo -e "${_yellow}[提示]${_plain} 诊断报告导出失败，仅显示终端结果。"
     fi
+    print_line
+    wait_return
+}
+
+show_latest_diagnostics_report() {
+    clear
+    print_line
+    echo -e "            ${_green}--- 最近诊断报告 ---${_plain}"
+    print_line
+    if [[ ! -f "${HY2_DIAG_LATEST}" ]]; then
+        err "未找到最近诊断报告。请先执行菜单 (9) 一键环境诊断。"
+        print_line
+        wait_return
+        return
+    fi
+    cat "${HY2_DIAG_LATEST}"
     print_line
     wait_return
 }
@@ -951,10 +970,11 @@ main_menu() {
         echo -e "    (7) [?] 查看常用指令速查"
         echo -e "    (8) [S] 查看 Sing-box 完整模板"
         echo -e "    (9) [D] 一键环境诊断"
+        echo -e "    (10) [R] 查看最近诊断报告"
         echo -e "    (0) [x] 退出面板"
         print_line
         
-        read -p " => 请选择操作 [0-9]: " menu_num
+        read -p " => 请选择操作 [0-10]: " menu_num
         
         case "${menu_num}" in
             1) install_hy2_core; sleep 2 ;;
@@ -978,6 +998,7 @@ main_menu() {
             7) show_cheatsheet ;;
             8) show_singbox_template ;;
             9) show_diagnostics ;;
+            10) show_latest_diagnostics_report ;;
             0) exit 0 ;;
             *) err "输入错误"; sleep 1 ;;
         esac
