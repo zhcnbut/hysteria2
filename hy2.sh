@@ -576,6 +576,124 @@ show_cheatsheet() {
     read -n 1 -s -r -p "按任意键返回主菜单..."
 }
 
+show_singbox_template() {
+    if [[ ! -f ${HY2_META_FILE} ]]; then
+        err "未找到节点元数据，请先执行 (2) 配置 Hysteria2 节点！"
+        sleep 2
+        return
+    fi
+    if ! read_meta_info; then
+        err "节点元数据损坏或缺失，请重新执行 (2) 配置节点。"
+        sleep 2
+        return
+    fi
+
+    local json_ip json_password json_sni
+    json_ip="$(json_escape "${ip}")"
+    json_password="$(json_escape "${password}")"
+    json_sni="$(json_escape "${sni}")"
+
+    clear
+    print_line
+    echo -e "          ${_green}--- Sing-box 完整模板 (Android/iOS) ---${_plain}"
+    print_line
+    echo -e "{
+  \"dns\": {
+    \"servers\": [
+      {
+        \"tag\": \"cf\",
+        \"address\": \"https://1.1.1.1/dns-query\"
+      },
+      {
+        \"tag\": \"local\",
+        \"address\": \"223.5.5.5\",
+        \"detour\": \"direct\"
+      },
+      {
+        \"tag\": \"block\",
+        \"address\": \"rcode://success\"
+      }
+    ],
+    \"rules\": [
+      {
+        \"geosite\": \"category-ads-all\",
+        \"server\": \"block\",
+        \"disable_cache\": true
+      },
+      {
+        \"outbound\": \"any\",
+        \"server\": \"local\"
+      },
+      {
+        \"geosite\": \"cn\",
+        \"server\": \"local\"
+      }
+    ],
+    \"strategy\": \"ipv4_only\"
+  },
+  \"inbounds\": [
+    {
+      \"type\": \"tun\",
+      \"inet4_address\": \"172.19.0.1/30\",
+      \"auto_route\": true,
+      \"strict_route\": false,
+      \"sniff\": true
+    }
+  ],
+  \"outbounds\": [
+    {
+      \"type\": \"hysteria2\",
+      \"tag\": \"proxy\",
+      \"server\": \"${json_ip}\",
+      \"server_port\": ${port},
+      \"up_mbps\": ${up_mbps},
+      \"down_mbps\": ${down_mbps},
+      \"password\": \"${json_password}\",
+      \"tls\": {
+        \"enabled\": true,
+        \"server_name\": \"${json_sni}\",
+        \"insecure\": ${insecure}
+      }
+    },
+    {
+      \"type\": \"direct\",
+      \"tag\": \"direct\"
+    },
+    {
+      \"type\": \"block\",
+      \"tag\": \"block\"
+    },
+    {
+      \"type\": \"dns\",
+      \"tag\": \"dns-out\"
+    }
+  ],
+  \"route\": {
+    \"rules\": [
+      {
+        \"protocol\": \"dns\",
+        \"outbound\": \"dns-out\"
+      },
+      {
+        \"geosite\": \"cn\",
+        \"geoip\": [
+          \"private\",
+          \"cn\"
+        ],
+        \"outbound\": \"direct\"
+      },
+      {
+        \"geosite\": \"category-ads-all\",
+        \"outbound\": \"block\"
+      }
+    ],
+    \"auto_detect_interface\": true
+  }
+}"
+    print_line
+    read -n 1 -s -r -p "按任意键返回主菜单..."
+}
+
 # --- 5. 主菜单系统 (高兼容极客版) ---
 main_menu() {
     while true; do
@@ -608,10 +726,11 @@ main_menu() {
         echo -e "    (5) [i] 查看实时运行日志"
         echo -e "    (6) [-] 完全卸载清理"
         echo -e "    (7) [?] 查看常用指令速查"
+        echo -e "    (8) [S] 查看 Sing-box 完整模板"
         echo -e "    (0) [x] 退出面板"
         print_line
         
-        read -p " => 请选择操作 [0-7]: " menu_num
+        read -p " => 请选择操作 [0-8]: " menu_num
         
         case "${menu_num}" in
             1) install_hy2_core; sleep 2 ;;
@@ -633,6 +752,7 @@ main_menu() {
                 ;;
             6) uninstall_hy2 ;;
             7) show_cheatsheet ;;
+            8) show_singbox_template ;;
             0) exit 0 ;;
             *) err "输入错误"; sleep 1 ;;
         esac
