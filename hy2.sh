@@ -300,6 +300,13 @@ restart_service_with_rollback() {
     return 1
 }
 
+show_recent_service_logs() {
+    print_line
+    echo -e "${_yellow}[提示]${_plain} 最近 20 行服务日志："
+    journalctl -u "${HY2_SERVICE}" --no-pager -n 20 2>/dev/null || true
+    print_line
+}
+
 render_singbox_outbound_snippet() {
     local json_ip="$1"
     local port="$2"
@@ -616,6 +623,15 @@ config_hy2() {
         ok "Hysteria2 节点配置并启动成功！"
     else
         err "启动失败！可能是端口被占用，或 CA 证书申请失败。请使用菜单 (5) 查看日志。"
+        err "检测到服务未保持运行，正在尝试自动回滚到上一版配置..."
+        if restore_runtime_files && systemctl restart "${HY2_SERVICE}"; then
+            err "已自动回滚到上一版配置，本次变更未生效。"
+        else
+            err "自动回滚失败，请手动检查配置与日志。"
+        fi
+        show_recent_service_logs
+        sleep 3
+        return 1
     fi
     sleep 2
 }
