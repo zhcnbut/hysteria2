@@ -29,4 +29,7 @@ bash scripts/check-menu-sync.sh
 echo "[INFO] Checking version marker consistency..."
 bash scripts/check-version-sync.sh
 
+echo "[INFO] Running smoke E2E checks..."
+bash scripts/smoke-e2e.sh
+
 echo "[OK] All checks passed."

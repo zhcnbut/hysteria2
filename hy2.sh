@@ -5,7 +5,7 @@
 # ==========================================
 
 # --- 1. 全局变量与颜色输出 ---
-sh_ver="v1.2.1"
+sh_ver="v1.3.0"
 
 _red="\033[0;31m"
 _green="\033[0;32m"
@@ -134,6 +134,21 @@ format_host_for_url() {
     printf '%s' "${host}"
 }
 
+write_file_atomic() {
+    local target="$1"
+    local tmp_file
+    tmp_file="$(mktemp "${target}.tmp.XXXXXX")" || return 1
+    if ! cat > "${tmp_file}"; then
+        rm -f "${tmp_file}" >/dev/null 2>&1 || true
+        return 1
+    fi
+    if ! mv -f "${tmp_file}" "${target}"; then
+        rm -f "${tmp_file}" >/dev/null 2>&1 || true
+        return 1
+    fi
+    return 0
+}
+
 backup_runtime_files() {
     mkdir -p "${HY2_BACKUP_DIR}" || return 1
     cp -f "${HY2_CONF_FILE}" "${HY2_BACKUP_DIR}/config.yaml.bak" 2>/dev/null || true
@@ -234,7 +249,7 @@ write_ca_config() {
     local password="$4"
     local masquerade_url="$5"
 
-    cat << EOF > "${HY2_CONF_FILE}"
+    cat << EOF | write_file_atomic "${HY2_CONF_FILE}"
 listen: :${port}
 acme:
   domains:
@@ -256,7 +271,7 @@ write_self_signed_config() {
     local password="$2"
     local masquerade_url="$3"
 
-    cat << EOF > "${HY2_CONF_FILE}"
+    cat << EOF | write_file_atomic "${HY2_CONF_FILE}"
 listen: :${port}
 tls:
   cert: ${HY2_CONF_DIR}/server.crt
@@ -303,7 +318,7 @@ write_meta_info() {
     local up_mbps="$6"
     local down_mbps="$7"
 
-    cat > "${HY2_META_FILE}" << EOF
+    cat << EOF | write_file_atomic "${HY2_META_FILE}"
 ip=${ip}
 port=${port}
 password=${password}
@@ -336,6 +351,7 @@ restart_service_with_rollback() {
         return 0
     fi
     err "重启服务失败，正在尝试自动回滚到上一版配置..."
+    show_service_failure_hint
     if restore_runtime_files && systemctl restart "${HY2_SERVICE}"; then
         err "已回滚到上一版配置，本次变更未生效。"
     else
@@ -349,6 +365,34 @@ show_recent_service_logs() {
     echo -e "${_yellow}[提示]${_plain} 最近 20 行服务日志："
     journalctl -u "${HY2_SERVICE}" --no-pager -n 20 2>/dev/null || true
     print_line
+}
+
+show_service_failure_hint() {
+    local logs
+    logs="$(journalctl -u "${HY2_SERVICE}" --no-pager -n 60 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+    [[ -z "${logs}" ]] && return 0
+
+    if [[ "${logs}" == *"permission denied"* && "${logs}" == *"config.yaml"* ]]; then
+        err "诊断结论：服务用户无权读取 config.yaml。"
+        echo -e "      建议执行：systemctl show -p User,Group ${HY2_SERVICE}"
+        echo -e "      建议执行：namei -l ${HY2_CONF_FILE}"
+        return 0
+    fi
+    if [[ "${logs}" == *"address already in use"* || "${logs}" == *"bind: address already in use"* ]]; then
+        err "诊断结论：监听端口被占用。"
+        echo -e "      建议执行：ss -lntp | grep \":${port:-443}\\b\""
+        return 0
+    fi
+    if [[ "${logs}" == *"acme"* && ( "${logs}" == *"timeout"* || "${logs}" == *"no such host"* || "${logs}" == *"dns"* ) ]]; then
+        err "诊断结论：CA 证书申请失败（可能是 DNS/80/443 不通）。"
+        echo -e "      建议检查：域名 A/AAAA 解析、80/443 入站、防火墙与云安全组。"
+        return 0
+    fi
+    if [[ "${logs}" == *"failed to read server config"* || "${logs}" == *"yaml"* || "${logs}" == *"parse"* ]]; then
+        err "诊断结论：配置文件内容异常或格式错误。"
+        echo -e "      建议执行：hysteria server -c ${HY2_CONF_FILE}"
+        return 0
+    fi
 }
 
 render_singbox_outbound_snippet() {
@@ -613,7 +657,11 @@ config_hy2() {
             return 1
         fi
         
-        write_ca_config "${port}" "${domain}" "${email}" "${password}" "${masquerade_url}"
+        if ! write_ca_config "${port}" "${domain}" "${email}" "${password}" "${masquerade_url}"; then
+            err "写入 CA 配置失败，请检查磁盘空间与目录权限。"
+            sleep 2
+            return 1
+        fi
         set_server_config_permissions
         local sni="${domain}"
         local insecure="false"
@@ -638,7 +686,11 @@ config_hy2() {
         
         set_tls_file_permissions
         
-        write_self_signed_config "${port}" "${password}" "${masquerade_url}"
+        if ! write_self_signed_config "${port}" "${password}" "${masquerade_url}"; then
+            err "写入自签配置失败，请检查磁盘空间与目录权限。"
+            sleep 2
+            return 1
+        fi
         set_server_config_permissions
         local insecure="true"
     fi
@@ -650,7 +702,11 @@ config_hy2() {
         return 1
     fi
 
-    write_meta_info "${SERVER_IP}" "${port}" "${password}" "${sni}" "${insecure}" "${up_mbps}" "${down_mbps}"
+    if ! write_meta_info "${SERVER_IP}" "${port}" "${password}" "${sni}" "${insecure}" "${up_mbps}" "${down_mbps}"; then
+        err "写入节点元数据失败，请检查磁盘空间与目录权限。"
+        sleep 2
+        return 1
+    fi
     chmod 600 "${HY2_META_FILE}" >/dev/null 2>&1 || true
 
     msg "检测到服务运行用户: $(get_service_run_user)"
@@ -664,6 +720,7 @@ config_hy2() {
         ok "Hysteria2 节点配置并启动成功！"
     else
         err "启动失败！可能是端口被占用，或 CA 证书申请失败。请使用菜单 (5) 查看日志。"
+        show_service_failure_hint
         err "检测到服务未保持运行，正在尝试自动回滚到上一版配置..."
         if restore_runtime_files && systemctl restart "${HY2_SERVICE}"; then
             err "已自动回滚到上一版配置，本次变更未生效。"
@@ -861,6 +918,9 @@ show_diagnostics() {
     local fail_count=0
     local line_status
     local now_ts diag_file summary_plain
+    local -a diag_conclusions=()
+    local -a diag_suggestions=()
+    local -a diag_commands=()
     now_ts="$(date '+%Y%m%d-%H%M%S')"
     diag_file="${HY2_DIAG_DIR}/hy2-diagnose-${now_ts}.log"
     : > "${diag_file}" 2>/dev/null || diag_file=""
@@ -894,6 +954,21 @@ show_diagnostics() {
         esac
     }
 
+    add_diag_item() {
+        local conclusion="$1"
+        local suggestion="$2"
+        local command_hint="$3"
+        local existing
+        for existing in "${diag_conclusions[@]}"; do
+            if [[ "${existing}" == "${conclusion}" ]]; then
+                return 0
+            fi
+        done
+        diag_conclusions+=("${conclusion}")
+        diag_suggestions+=("${suggestion}")
+        diag_commands+=("${command_hint}")
+    }
+
     clear
     print_line
     echo -e "             ${_green}--- 一键环境诊断 ---${_plain}"
@@ -909,30 +984,50 @@ show_diagnostics() {
         print_result "OK" "已检测到 Hysteria2 内核。"
     else
         print_result "FAIL" "未检测到 Hysteria2 内核。请先执行菜单 (1)。"
+        add_diag_item \
+            "未安装 Hysteria2 内核。" \
+            "先安装内核，再进行节点配置与启动服务。" \
+            "菜单 (1) 一键安装/更新 Hysteria2 内核"
     fi
 
     if systemctl is-enabled "${HY2_SERVICE}" >/dev/null 2>&1; then
         print_result "OK" "服务已设置开机自启。"
     else
         print_result "WARN" "服务未设置开机自启，可执行: systemctl enable ${HY2_SERVICE}"
+        add_diag_item \
+            "服务未开启开机自启。" \
+            "建议开启自启，避免重启后节点离线。" \
+            "systemctl enable ${HY2_SERVICE}"
     fi
 
     if systemctl is-active --quiet "${HY2_SERVICE}"; then
         print_result "OK" "服务当前状态: 运行中。"
     else
         print_result "WARN" "服务当前未运行，可执行菜单 (4) 启动/重启。"
+        add_diag_item \
+            "服务当前未运行。" \
+            "先尝试启动服务，若失败再看实时日志定位原因。" \
+            "systemctl restart ${HY2_SERVICE} && journalctl -u ${HY2_SERVICE} --no-pager -n 60"
     fi
 
     if [[ -f "${HY2_CONF_FILE}" ]]; then
         print_result "OK" "配置文件存在: ${HY2_CONF_FILE}"
     else
         print_result "FAIL" "配置文件不存在: ${HY2_CONF_FILE}"
+        add_diag_item \
+            "服务配置文件缺失。" \
+            "重新执行节点配置生成 config.yaml。" \
+            "菜单 (2) 配置 Hysteria2 节点 (CA / 自签)"
     fi
 
     if [[ -f "${HY2_META_FILE}" ]] && read_meta_info; then
         print_result "OK" "节点元数据存在且可解析。"
     else
         print_result "WARN" "节点元数据缺失或损坏，建议重新执行菜单 (2)。"
+        add_diag_item \
+            "节点元数据缺失或损坏。" \
+            "重新生成节点配置，确保分享链接参数准确。" \
+            "菜单 (2) 配置 Hysteria2 节点 (CA / 自签)"
     fi
 
     if [[ -f "${HY2_CONF_FILE}" ]]; then
@@ -945,12 +1040,20 @@ show_diagnostics() {
                     print_result "OK" "检测到 UDP 端口 ${listen_port} 正在监听。"
                 else
                     print_result "WARN" "未检测到 UDP 端口 ${listen_port} 监听，可能服务未启动。"
+                    add_diag_item \
+                        "未检测到 UDP 端口 ${listen_port} 监听。" \
+                        "可能服务未运行或端口被占用，请先检查服务与端口占用。" \
+                        "ss -lntup | grep -E \"[:.]${listen_port}[[:space:]]\""
                 fi
             else
                 print_result "WARN" "系统未安装 ss，跳过端口监听检查。"
             fi
         else
             print_result "WARN" "未能从配置中解析 listen 端口。"
+            add_diag_item \
+                "无法从配置解析 listen 端口。" \
+                "请检查 config.yaml 语法与 listen 字段格式。" \
+                "hysteria server -c ${HY2_CONF_FILE}"
         fi
 
         if grep -q '^tls:' "${HY2_CONF_FILE}"; then
@@ -961,16 +1064,28 @@ show_diagnostics() {
                 print_result "OK" "自签证书文件存在: ${cert_path}"
             else
                 print_result "FAIL" "自签证书文件缺失。"
+                add_diag_item \
+                    "自签证书文件缺失。" \
+                    "重新执行自签配置生成证书，或检查证书路径。" \
+                    "菜单 (2) -> 自签模式重新生成"
             fi
             if [[ -n "${key_path}" && -f "${key_path}" ]]; then
                 print_result "OK" "自签私钥文件存在: ${key_path}"
             else
                 print_result "FAIL" "自签私钥文件缺失。"
+                add_diag_item \
+                    "自签私钥文件缺失。" \
+                    "重新执行自签配置生成私钥，确认文件权限可读。" \
+                    "菜单 (2) -> 自签模式重新生成"
             fi
         elif grep -q '^acme:' "${HY2_CONF_FILE}"; then
             print_result "OK" "当前为 CA 证书模式。"
         else
             print_result "WARN" "未检测到 tls/acme 配置块，请确认配置正确。"
+            add_diag_item \
+                "配置未识别到 tls/acme 证书块。" \
+                "配置内容可能异常，建议重新生成节点配置。" \
+                "菜单 (2) 重新配置节点"
         fi
     fi
 
@@ -980,9 +1095,17 @@ show_diagnostics() {
         print_result "OK" "公网 IP 探测成功: ${probe_ip}"
         if [[ -n "${ip:-}" && "${ip}" != "${probe_ip}" ]]; then
             print_result "WARN" "元数据 IP(${ip}) 与当前探测 IP(${probe_ip}) 不一致。"
+            add_diag_item \
+                "元数据 IP 与当前公网 IP 不一致。" \
+                "客户端可能连向旧 IP，建议更新客户端配置。" \
+                "菜单 (3) 重新获取分享链接并覆盖客户端配置"
         fi
     else
         print_result "WARN" "公网 IP 探测失败，请检查网络连接。"
+        add_diag_item \
+            "公网 IP 探测失败。" \
+            "可能是本机网络受限或 DNS 问题，先验证基础网络连通。" \
+            "curl -4 https://api.ipify.org && curl -6 https://api64.ipify.org"
     fi
 
     print_line
@@ -998,6 +1121,22 @@ show_diagnostics() {
     fi
     echo -e "${line_status}"
     diag_log "${summary_plain}"
+    if (( ${#diag_conclusions[@]} > 0 )); then
+        local idx
+        print_line
+        echo -e "${_yellow}[诊断建议]${_plain} 结论 + 建议 + 命令"
+        diag_log "--- 诊断建议 ---"
+        for idx in "${!diag_conclusions[@]}"; do
+            echo -e "  [结论] ${diag_conclusions[${idx}]}"
+            echo -e "  [建议] ${diag_suggestions[${idx}]}"
+            echo -e "  [命令] ${diag_commands[${idx}]}"
+            echo -e ""
+            diag_log "[结论] ${diag_conclusions[${idx}]}"
+            diag_log "[建议] ${diag_suggestions[${idx}]}"
+            diag_log "[命令] ${diag_commands[${idx}]}"
+            diag_log ""
+        done
+    fi
     if [[ -n "${diag_file}" ]]; then
         cp -f "${diag_file}" "${HY2_DIAG_LATEST}" >/dev/null 2>&1 || true
         echo -e "${_blue}[信息]${_plain} 诊断报告已导出: ${diag_file}"
@@ -1173,6 +1312,8 @@ main_menu() {
 }
 
 # 入口运行
-require_root
-preflight_check
-main_menu
+if [[ "${HY2_LIB_ONLY:-0}" != "1" ]]; then
+    require_root
+    preflight_check
+    main_menu
+fi

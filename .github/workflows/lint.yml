@@ -11,6 +11,7 @@ on:
       - 'scripts/verify.sh'
       - 'scripts/check-menu-sync.sh'
       - 'scripts/check-version-sync.sh'
+      - 'scripts/smoke-e2e.sh'
       - '.github/workflows/lint.yml'
 
 jobs:
@@ -24,7 +25,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y shellcheck
 
       - name: Make verify script executable
-        run: chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh
+        run: chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh
 
       - name: Run verification
         run: ./scripts/verify.sh
