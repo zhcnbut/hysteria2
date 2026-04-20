@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.4.0 - 2026-04-20
 
 - Added `bats` unit tests under `tests/unit` for core helper behavior.
 - Extended `scripts/verify.sh` to run `bats tests/unit`.
