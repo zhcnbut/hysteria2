@@ -6,6 +6,8 @@
 - Extended `scripts/verify.sh` to run `bats tests/unit`.
 - Upgraded CI lint workflow to verify on both Ubuntu and Debian container environments.
 - Synced release verification dependencies with new bats-based test suite.
+- Added interactive config flow replay test (`tests/e2e/config-flow.sh`) and wired it into `verify`.
+- Enhanced diagnostics output with severity summary (`FAIL/WARN/建议项`) for faster triage.
 
 ## v1.3.0 - 2026-04-05
 

@@ -1121,6 +1121,8 @@ show_diagnostics() {
     fi
     echo -e "${line_status}"
     diag_log "${summary_plain}"
+    echo -e "${_blue}[分级]${_plain} 阻断项(FAIL): ${fail_count} | 警告项(WARN): ${warn_count} | 建议项: ${#diag_conclusions[@]}"
+    diag_log "分级: 阻断项(FAIL)=${fail_count}, 警告项(WARN)=${warn_count}, 建议项=${#diag_conclusions[@]}"
     if (( ${#diag_conclusions[@]} > 0 )); then
         local idx
         print_line

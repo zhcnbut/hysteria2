@@ -61,6 +61,8 @@
 │   ├── check-version-sync.sh       # 版本号与 README 标识一致性检查
 │   └── smoke-e2e.sh                # 无特权端到端冒烟测试
 ├── tests/
+│   ├── e2e/
+│   │   └── config-flow.sh          # 交互配置流程回放测试
 │   └── unit/
 │       └── hy2_core.bats           # 核心函数回归测试（bats）
 └── .github/workflows/
@@ -255,6 +257,7 @@ chmod +x scripts/verify.sh
 - 版本号与 README 标识一致性检查
 - 无特权端到端冒烟测试（配置生成/元数据解析/SNI 选择/分享片段/重启失败回滚）
 - `bats` 核心函数回归测试（`tests/unit`）
+- 交互配置流程回放测试（`tests/e2e/config-flow.sh`）
 
 ### 10.3 在 `hy2.sh` 新增菜单功能的标准步骤
 

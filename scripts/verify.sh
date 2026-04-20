@@ -36,4 +36,7 @@ bash scripts/smoke-e2e.sh
 echo "[INFO] Running bats tests..."
 bats tests/unit
 
+echo "[INFO] Running config flow replay tests..."
+bash tests/e2e/config-flow.sh
+
 echo "[OK] All checks passed."

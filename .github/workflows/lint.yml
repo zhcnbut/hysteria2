@@ -26,7 +26,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y shellcheck bats
 
       - name: Make verify script executable
-        run: chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh
+        run: chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh tests/e2e/config-flow.sh
 
       - name: Run verification
         run: ./scripts/verify.sh
@@ -42,7 +42,7 @@ jobs:
         run: apt-get update && apt-get install -y bash shellcheck bats grep sed gawk coreutils
 
       - name: Make verify script executable
-        run: chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh
+        run: chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh tests/e2e/config-flow.sh
 
       - name: Run verification
         run: ./scripts/verify.sh

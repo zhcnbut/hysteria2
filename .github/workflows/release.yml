@@ -67,7 +67,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y shellcheck bats
-          chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh
+          chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh tests/e2e/config-flow.sh
           ./scripts/verify.sh
 
       - name: Generate Checksums
