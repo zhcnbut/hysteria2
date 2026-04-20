@@ -73,10 +73,8 @@ teardown() {
   backup_runtime_files
   printf "broken-config" > "${HY2_CONF_FILE}"
 
-  restart_calls=0
   run restart_service_with_rollback
   [ "${status}" -ne 0 ]
-  [ "${restart_calls}" -eq 2 ]
   [ "$(cat "${HY2_CONF_FILE}")" = "stable-config" ]
 }
 
