@@ -15,6 +15,7 @@ check_cmd() {
 check_cmd bash
 check_cmd shellcheck
 check_cmd grep
+check_cmd bats
 
 echo "[INFO] Running bash syntax checks..."
 bash -n hy2.sh
@@ -31,5 +32,8 @@ bash scripts/check-version-sync.sh
 
 echo "[INFO] Running smoke E2E checks..."
 bash scripts/smoke-e2e.sh
+
+echo "[INFO] Running bats tests..."
+bats tests/unit
 
 echo "[OK] All checks passed."

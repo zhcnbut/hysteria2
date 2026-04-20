@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added `bats` unit tests under `tests/unit` for core helper behavior.
+- Extended `scripts/verify.sh` to run `bats tests/unit`.
+- Upgraded CI lint workflow to verify on both Ubuntu and Debian container environments.
+- Synced release verification dependencies with new bats-based test suite.
+
 ## v1.3.0 - 2026-04-05
 
 - Added non-privileged smoke E2E checks and wired them into `verify`, lint, and release workflows.

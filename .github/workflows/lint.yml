@@ -12,17 +12,34 @@ on:
       - 'scripts/check-menu-sync.sh'
       - 'scripts/check-version-sync.sh'
       - 'scripts/smoke-e2e.sh'
+      - 'tests/**'
       - '.github/workflows/lint.yml'
 
 jobs:
-  shell-lint:
+  verify-ubuntu:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y shellcheck bats
+
+      - name: Make verify script executable
+        run: chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh
+
+      - name: Run verification
+        run: ./scripts/verify.sh
+
+  verify-debian:
+    runs-on: ubuntu-latest
+    container: debian:12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: apt-get update && apt-get install -y bash shellcheck bats grep sed gawk coreutils
 
       - name: Make verify script executable
         run: chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh
