@@ -40,15 +40,15 @@ teardown() {
 }
 
 @test "config and meta writers should preserve values correctly" {
-  run write_self_signed_config "443" "pa'ss" "https://example.com"
-  [ "${status}" -eq 0 ]
+  write_self_signed_config "443" "pa'ss" "https://example.com"
+  [ "$?" -eq 0 ]
   grep -Fq "password: 'pa''ss'" "${HY2_CONF_FILE}"
 
-  run write_meta_info "1.2.3.4" "443" "pa'ss" "bing.com" "true" "20" "100"
-  [ "${status}" -eq 0 ]
+  write_meta_info "1.2.3.4" "443" "pa'ss" "bing.com" "true" "20" "100"
+  [ "$?" -eq 0 ]
 
-  run read_meta_info
-  [ "${status}" -eq 0 ]
+  read_meta_info
+  [ "$?" -eq 0 ]
   [ "${ip}" = "1.2.3.4" ]
   [ "${port}" = "443" ]
   [ "${password}" = "pa'ss" ]
