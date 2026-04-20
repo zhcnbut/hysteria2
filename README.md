@@ -60,8 +60,11 @@
 │   ├── check-menu-sync.sh          # 菜单与 README 一致性检查
 │   ├── check-version-sync.sh       # 版本号与 README 标识一致性检查
 │   └── smoke-e2e.sh                # 无特权端到端冒烟测试
+├── tests/
+│   └── unit/
+│       └── hy2_core.bats           # 核心函数回归测试（bats）
 └── .github/workflows/
-    ├── lint.yml                    # 语法/静态/一致性检查
+    ├── lint.yml                    # Ubuntu + Debian 验证矩阵
     └── release.yml                 # 自动发布流程
 ```
 
@@ -251,6 +254,7 @@ chmod +x scripts/verify.sh
 - 菜单与 README 预览一致性检查
 - 版本号与 README 标识一致性检查
 - 无特权端到端冒烟测试（配置生成/元数据解析/SNI 选择/分享片段/重启失败回滚）
+- `bats` 核心函数回归测试（`tests/unit`）
 
 ### 10.3 在 `hy2.sh` 新增菜单功能的标准步骤
 
