@@ -45,6 +45,13 @@ jobs:
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
           echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
 
+      - name: Verify Scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck bats
+          chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh tests/e2e/config-flow.sh
+          ./scripts/verify.sh
+
       - name: Check if Release is Needed
         id: check_release
         run: |
@@ -61,14 +68,6 @@ jobs:
         run: |
           tar --exclude=".git" --exclude=".github" -zcvf ../code.tar.gz .
           mv ../code.tar.gz ./
-
-      - name: Verify Scripts Before Release
-        if: env.should_release == 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck bats
-          chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh tests/e2e/config-flow.sh
-          ./scripts/verify.sh
 
       - name: Generate Checksums
         if: env.should_release == 'true'

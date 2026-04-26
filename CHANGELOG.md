@@ -8,6 +8,10 @@
 - Synced release verification dependencies with new bats-based test suite.
 - Added interactive config flow replay test (`tests/e2e/config-flow.sh`) and wired it into `verify`.
 - Enhanced diagnostics output with severity summary (`FAIL/WARN/建议项`) for faster triage.
+- Moved release verification before release-skipping logic so Auto Release reflects script health even when no new tag is published.
+- Included self-signed certificate files in automatic rollback backups.
+- Hardened manual restore to stop on missing or failed critical config restoration.
+- Added `.gitattributes` to keep scripts and workflows on LF line endings.
 
 ## v1.3.0 - 2026-04-05
 

@@ -273,6 +273,7 @@ chmod +x scripts/verify.sh
 - 对外部命令（`systemctl/curl/openssl`）尽量做返回码判断
 - 配置写入后统一做权限收敛
 - 影响服务可用性的改动，优先考虑回滚路径
+- Shell、Bats、YAML 和 Markdown 文件通过 `.gitattributes` 固定 LF 换行，避免 Windows 编辑后影响 Linux 执行
 
 ### 10.5 发布流程说明
 

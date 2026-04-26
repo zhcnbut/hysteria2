@@ -153,6 +153,8 @@ backup_runtime_files() {
     mkdir -p "${HY2_BACKUP_DIR}" || return 1
     cp -f "${HY2_CONF_FILE}" "${HY2_BACKUP_DIR}/config.yaml.bak" 2>/dev/null || true
     cp -f "${HY2_META_FILE}" "${HY2_BACKUP_DIR}/meta.info.bak" 2>/dev/null || true
+    cp -f "${HY2_CONF_DIR}/server.crt" "${HY2_BACKUP_DIR}/server.crt.bak" 2>/dev/null || true
+    cp -f "${HY2_CONF_DIR}/server.key" "${HY2_BACKUP_DIR}/server.key.bak" 2>/dev/null || true
     return 0
 }
 
@@ -164,11 +166,20 @@ restore_runtime_files() {
     if [[ -f "${HY2_BACKUP_DIR}/meta.info.bak" ]]; then
         cp -f "${HY2_BACKUP_DIR}/meta.info.bak" "${HY2_META_FILE}" || true
     fi
+    if [[ -f "${HY2_BACKUP_DIR}/server.crt.bak" ]]; then
+        cp -f "${HY2_BACKUP_DIR}/server.crt.bak" "${HY2_CONF_DIR}/server.crt" || true
+    fi
+    if [[ -f "${HY2_BACKUP_DIR}/server.key.bak" ]]; then
+        cp -f "${HY2_BACKUP_DIR}/server.key.bak" "${HY2_CONF_DIR}/server.key" || true
+    fi
     set_config_dir_permissions
     if [[ -f "${HY2_CONF_FILE}" ]]; then
         set_server_config_permissions
     fi
     chmod 600 "${HY2_META_FILE}" >/dev/null 2>&1 || true
+    if [[ -f "${HY2_CONF_DIR}/server.key" ]]; then
+        set_tls_file_permissions
+    fi
     if [[ "${restored}" -eq 1 ]]; then
         return 0
     fi
@@ -1190,8 +1201,18 @@ restore_latest_manual_backup() {
         return 1
     fi
 
-    cp -f "${latest_dir}/config.yaml" "${HY2_CONF_FILE}" 2>/dev/null || true
-    cp -f "${latest_dir}/meta.info" "${HY2_META_FILE}" 2>/dev/null || true
+    if [[ ! -f "${latest_dir}/config.yaml" ]]; then
+        err "备份中缺少 config.yaml，已中止恢复: ${latest_dir}"
+        return 1
+    fi
+    if ! cp -f "${latest_dir}/config.yaml" "${HY2_CONF_FILE}" 2>/dev/null; then
+        err "恢复 config.yaml 失败，请检查目录权限: ${HY2_CONF_FILE}"
+        return 1
+    fi
+    if [[ -f "${latest_dir}/meta.info" ]] && ! cp -f "${latest_dir}/meta.info" "${HY2_META_FILE}" 2>/dev/null; then
+        err "恢复 meta.info 失败，请检查目录权限: ${HY2_META_FILE}"
+        return 1
+    fi
     cp -f "${latest_dir}/server.crt" "${HY2_CONF_DIR}/server.crt" 2>/dev/null || true
     cp -f "${latest_dir}/server.key" "${HY2_CONF_DIR}/server.key" 2>/dev/null || true
     set_config_dir_permissions

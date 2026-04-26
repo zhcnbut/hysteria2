@@ -70,12 +70,18 @@ teardown() {
 
   printf "stable-config" > "${HY2_CONF_FILE}"
   printf "stable-meta" > "${HY2_META_FILE}"
+  printf "stable-cert" > "${HY2_CONF_DIR}/server.crt"
+  printf "stable-key" > "${HY2_CONF_DIR}/server.key"
   backup_runtime_files
   printf "broken-config" > "${HY2_CONF_FILE}"
+  printf "broken-cert" > "${HY2_CONF_DIR}/server.crt"
+  printf "broken-key" > "${HY2_CONF_DIR}/server.key"
 
   run restart_service_with_rollback
   [ "${status}" -ne 0 ]
   [ "$(cat "${HY2_CONF_FILE}")" = "stable-config" ]
+  [ "$(cat "${HY2_CONF_DIR}/server.crt")" = "stable-cert" ]
+  [ "$(cat "${HY2_CONF_DIR}/server.key")" = "stable-key" ]
 }
 
 @test "show_service_failure_hint should classify permission denied logs" {
