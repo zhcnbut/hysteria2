@@ -1285,12 +1285,12 @@ main_menu() {
         
         echo -e "  [状态] Core: ${core_version} | 服务: [ ${status} ]"
         print_line
-        echo -e "  [*] 节点与核心管理"
+        echo -e "  [节点与核心管理]"
         echo -e "    (1) 一键安装/更新 Hysteria2 内核"
         echo -e "    (2) 配置 Hysteria2 节点 (CA / 自签)"
         echo -e "    (3) 查看客户端配置与分享链接"
         echo -e ""
-        echo -e "  [*] 服务控制"
+        echo -e "  [服务控制]"
         echo -e "    (4) 启动 / 停止 / 重启 / 状态"
         echo -e "    (5) 查看实时运行日志"
         echo -e "    (6) 完全卸载清理"
