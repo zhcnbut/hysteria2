@@ -1269,7 +1269,7 @@ main_menu() {
     while true; do
         clear
         print_line
-        echo -e "        ${_green}Hysteria2-LuoPo 管理面板 ${sh_ver} |  快捷启动: hy2${_plain}"
+        echo -e "  ${_green}Hysteria2-LuoPo 管理面板 ${sh_ver} |  快捷启动: hy2${_plain}"
         print_line
         
         local status="${_red}未运行${_plain}"
@@ -1286,12 +1286,12 @@ main_menu() {
         
         echo -e "  内核版本: ${core_version}    服务状态: ${status}"
         print_sub_line
-        echo -e "  节点与核心管理"
+        echo -e "  节点核心管理"
         echo -e "    (1)  一键安装/更新 Hysteria2 内核"
         echo -e "    (2)  配置 Hysteria2 节点 (CA / 自签)"
         echo -e "    (3)  查看客户端配置与分享链接"
         echo -e ""
-        echo -e "  服务控制"
+        echo -e "  服务运行控制"
         echo -e "    (4)  启动 / 停止 / 重启 / 状态"
         echo -e "    (5)  查看实时运行日志"
         echo -e "    (6)  完全卸载清理"
