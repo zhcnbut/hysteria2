@@ -31,6 +31,7 @@ msg() { echo -e "${_blue}[信息]${_plain} $1"; }
 ok() { echo -e "${_green}[成功]${_plain} $1"; }
 err() { echo -e "${_red}[错误]${_plain} $1"; }
 print_line() { echo -e "${_blue}=====================================================${_plain}"; }
+print_sub_line() { echo -e "${_blue}-----------------------------------------------------${_plain}"; }
 wait_return() { read -n 1 -s -r -p "按任意键返回主菜单..."; }
 
 require_root() {
@@ -1283,23 +1284,23 @@ main_menu() {
             fi
         fi
         
-        echo -e "  [状态] Core: ${core_version} | 服务: [ ${status} ]"
-        print_line
-        echo -e "  [节点与核心管理]"
-        echo -e "    (1) 一键安装/更新 Hysteria2 内核"
-        echo -e "    (2) 配置 Hysteria2 节点 (CA / 自签)"
-        echo -e "    (3) 查看客户端配置与分享链接"
+        echo -e "  内核版本: ${core_version}    服务状态: ${status}"
+        print_sub_line
+        echo -e "  节点与核心管理"
+        echo -e "    (1)  一键安装/更新 Hysteria2 内核"
+        echo -e "    (2)  配置 Hysteria2 节点 (CA / 自签)"
+        echo -e "    (3)  查看客户端配置与分享链接"
         echo -e ""
-        echo -e "  [服务控制]"
-        echo -e "    (4) 启动 / 停止 / 重启 / 状态"
-        echo -e "    (5) 查看实时运行日志"
-        echo -e "    (6) 完全卸载清理"
-        echo -e "    (7) 查看常用指令速查"
-        echo -e "    (8) 查看 Sing-box 完整模板"
-        echo -e "    (9) 一键环境诊断"
+        echo -e "  服务控制"
+        echo -e "    (4)  启动 / 停止 / 重启 / 状态"
+        echo -e "    (5)  查看实时运行日志"
+        echo -e "    (6)  完全卸载清理"
+        echo -e "    (7)  查看常用指令速查"
+        echo -e "    (8)  查看 Sing-box 完整模板"
+        echo -e "    (9)  一键环境诊断"
         echo -e "    (10) 查看最近诊断报告"
         echo -e "    (11) 配置备份与恢复"
-        echo -e "    (0) 退出面板"
+        echo -e "    (0)  退出面板"
         print_line
         
         read -p " => 请选择操作 [0-11]: " menu_num
