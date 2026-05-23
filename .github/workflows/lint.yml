@@ -28,8 +28,26 @@ jobs:
       - name: Make verify script executable
         run: chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh tests/e2e/config-flow.sh
 
-      - name: Run verification
-        run: ./scripts/verify.sh
+      - name: Run bash syntax checks
+        run: ./scripts/verify.sh syntax
+
+      - name: Run shellcheck
+        run: ./scripts/verify.sh shellcheck
+
+      - name: Check menu sync
+        run: ./scripts/verify.sh menu-sync
+
+      - name: Check version sync
+        run: ./scripts/verify.sh version-sync
+
+      - name: Run smoke E2E
+        run: ./scripts/verify.sh smoke-e2e
+
+      - name: Run bats tests
+        run: ./scripts/verify.sh bats
+
+      - name: Run config flow replay
+        run: ./scripts/verify.sh config-flow
 
   verify-debian:
     runs-on: ubuntu-latest
@@ -44,5 +62,23 @@ jobs:
       - name: Make verify script executable
         run: chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh tests/e2e/config-flow.sh
 
-      - name: Run verification
-        run: ./scripts/verify.sh
+      - name: Run bash syntax checks
+        run: ./scripts/verify.sh syntax
+
+      - name: Run shellcheck
+        run: ./scripts/verify.sh shellcheck
+
+      - name: Check menu sync
+        run: ./scripts/verify.sh menu-sync
+
+      - name: Check version sync
+        run: ./scripts/verify.sh version-sync
+
+      - name: Run smoke E2E
+        run: ./scripts/verify.sh smoke-e2e
+
+      - name: Run bats tests
+        run: ./scripts/verify.sh bats
+
+      - name: Run config flow replay
+        run: ./scripts/verify.sh config-flow

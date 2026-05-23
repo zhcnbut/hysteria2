@@ -45,12 +45,34 @@ jobs:
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
           echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
 
-      - name: Verify Scripts
+      - name: Install verification dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y shellcheck bats
-          chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh tests/e2e/config-flow.sh
-          ./scripts/verify.sh
+
+      - name: Make verify scripts executable
+        run: chmod +x scripts/verify.sh scripts/check-menu-sync.sh scripts/check-version-sync.sh scripts/smoke-e2e.sh tests/e2e/config-flow.sh
+
+      - name: Run bash syntax checks
+        run: ./scripts/verify.sh syntax
+
+      - name: Run shellcheck
+        run: ./scripts/verify.sh shellcheck
+
+      - name: Check menu sync
+        run: ./scripts/verify.sh menu-sync
+
+      - name: Check version sync
+        run: ./scripts/verify.sh version-sync
+
+      - name: Run smoke E2E
+        run: ./scripts/verify.sh smoke-e2e
+
+      - name: Run bats tests
+        run: ./scripts/verify.sh bats
+
+      - name: Run config flow replay
+        run: ./scripts/verify.sh config-flow
 
       - name: Check if Release is Needed
         id: check_release
