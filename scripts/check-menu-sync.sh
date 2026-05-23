@@ -13,7 +13,7 @@ assert_contains() {
     local file="$1"
     local pattern="$2"
     local label="$3"
-    if ! grep -Fq "${pattern}" "${file}"; then
+    if ! grep -Fq -- "${pattern}" "${file}"; then
         fail "${label} (missing: ${pattern})"
     fi
 }
