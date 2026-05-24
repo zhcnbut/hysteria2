@@ -8,6 +8,7 @@ on:
       - 'hy2.sh'
       - 'install.sh'
       - 'README.md'
+      - 'CHANGELOG.md'
       - 'scripts/verify.sh'
       - 'scripts/check-menu-sync.sh'
       - 'scripts/check-version-sync.sh'
@@ -96,6 +97,30 @@ jobs:
         run: |
           sha256sum code.tar.gz hy2.sh install.sh > SHA256SUMS
 
+      - name: Build Release Notes
+        if: env.should_release == 'true'
+        run: |
+          {
+            echo "## 主要变化"
+            echo
+            awk -v version="${VERSION}" '
+              $0 == "## " version || index($0, "## " version " - ") == 1 {
+                in_section = 1
+                next
+              }
+              in_section && /^## / {
+                exit
+              }
+              in_section {
+                print
+              }
+            ' CHANGELOG.md | sed '/^[[:space:]]*$/d'
+          } > RELEASE_BODY.md
+
+          if [ "$(wc -l < RELEASE_BODY.md)" -le 2 ]; then
+            echo "- 本版本暂无详细说明。" >> RELEASE_BODY.md
+          fi
+
       - name: Create Release
         if: env.should_release == 'true'
         uses: softprops/action-gh-release@v2
@@ -106,5 +131,5 @@ jobs:
             install.sh
             SHA256SUMS
           tag_name: ${{ env.VERSION }}
-          name: Hysteria2-LuoPo ${{ env.VERSION }}
-          body: "🤖 自动化构建发布版本: ${{ env.VERSION }}\n\n更新内容请参考最新的代码提交记录。"
+          name: ${{ env.VERSION }}
+          body_path: RELEASE_BODY.md

@@ -1,2 +1,5 @@
 PROJECT_MEMORY.md
 AGENTS.md
+LOCAL_WORK_MEMORY.md
+.codex-ci-check*/
+.codex-ci-check*.tar

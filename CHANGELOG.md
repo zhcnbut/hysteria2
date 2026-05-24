@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.4.1 - 2026-05-24
+
+- 发布页标题改为纯版本号，不再在版本号前追加 `Hysteria2-LuoPo`。
+- 发布说明改为从当前版本的 `CHANGELOG.md` 小节生成，只展示“主要变化”。
+- 发布前验证保持分阶段执行，便于快速定位 Actions 失败环节。
+- 修复菜单同步检查中横线分隔符被 `grep` 误解析为选项的问题。
+
 ## v1.4.0 - 2026-04-20
 
 - Added `bats` unit tests under `tests/unit` for core helper behavior.
