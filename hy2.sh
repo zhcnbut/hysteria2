@@ -20,6 +20,8 @@ HY2_SERVICE="hysteria-server.service"
 HY2_BACKUP_DIR="${HY2_CONF_DIR}/backup"
 HY2_DIAG_DIR="/tmp"
 HY2_DIAG_LATEST="${HY2_DIAG_DIR}/hy2-diagnose-latest.log"
+PANEL_UPDATE_URL="https://raw.githubusercontent.com/LuoPoJunZi/hysteria2-luopo/main/hy2.sh"
+PANEL_TARGET_BIN="/usr/local/bin/hy2"
 DEFAULT_PORT=443
 DEFAULT_MASQUERADE_URL="https://bing.com"
 DEFAULT_SELF_SNI="bing.com"
@@ -53,7 +55,7 @@ require_cmd() {
 preflight_check() {
     local missing=0
     local cmd
-    for cmd in curl systemctl openssl grep awk hostname journalctl; do
+    for cmd in curl systemctl openssl grep awk hostname journalctl head mktemp chmod mv; do
         if ! require_cmd "${cmd}"; then
             missing=1
         fi
@@ -563,6 +565,63 @@ install_hy2_core() {
     ok "Hysteria2 内核部署/更新完成！"
 }
 
+verify_downloaded_panel() {
+    local file="$1"
+    [[ -s "${file}" ]] || return 1
+    head -n 1 "${file}" | grep -q '^#!/bin/bash' || return 1
+    grep -q 'main_menu' "${file}" || return 1
+    grep -q 'Hysteria2-LuoPo 管理面板' "${file}" || return 1
+    return 0
+}
+
+update_panel_script() {
+    clear
+    print_line
+    echo -e "             ${_green}--- 更新管理面板脚本 ---${_plain}"
+    print_line
+    echo -e "当前版本: ${_yellow}${sh_ver}${_plain}"
+    echo -e "目标路径: ${_yellow}${PANEL_TARGET_BIN}${_plain}"
+    print_line
+    read -p " => 确认从 GitHub 拉取最新面板脚本并覆盖本地 hy2？(y/n): " confirm
+    if [[ "${confirm}" != "y" && "${confirm}" != "Y" ]]; then
+        msg "已取消更新。"
+        sleep 1
+        return 0
+    fi
+
+    local tmp_file
+    tmp_file="$(mktemp /tmp/hy2-panel.XXXXXX)" || {
+        err "创建临时文件失败。"
+        sleep 2
+        return 1
+    }
+
+    msg "正在下载最新管理面板脚本..."
+    if ! curl -fL --retry 2 --connect-timeout 8 -o "${tmp_file}" "${PANEL_UPDATE_URL}" >/dev/null 2>&1; then
+        rm -f "${tmp_file}"
+        err "下载失败，请检查网络或稍后重试。"
+        sleep 2
+        return 1
+    fi
+
+    if ! verify_downloaded_panel "${tmp_file}"; then
+        rm -f "${tmp_file}"
+        err "下载内容校验失败，已停止覆盖本地脚本。"
+        sleep 2
+        return 1
+    fi
+
+    if ! chmod +x "${tmp_file}" || ! mv -f "${tmp_file}" "${PANEL_TARGET_BIN}"; then
+        rm -f "${tmp_file}"
+        err "写入 ${PANEL_TARGET_BIN} 失败，请检查权限。"
+        sleep 2
+        return 1
+    fi
+
+    ok "管理面板脚本已更新。重新输入 hy2 即可使用新版。"
+    wait_return
+}
+
 uninstall_hy2() {
     print_line
     echo -e "${_red}[警告] 这将彻底卸载 Hysteria2 及所有节点配置！${_plain}"
@@ -793,6 +852,7 @@ show_cheatsheet() {
     echo -e "               ${_green}--- 常用指令速查 ---${_plain}"
     print_line
     echo -e "${_green}[服务器管理]${_plain}"
+    echo -e "bash <(curl -fsSL hy2.evzzz.com)"
     echo -e "bash <(curl -fsSL https://get.hy2.sh/)"
     echo -e "systemctl start ${HY2_SERVICE}"
     echo -e "systemctl restart ${HY2_SERVICE}"
@@ -1300,10 +1360,11 @@ main_menu() {
         echo -e "    (9)  一键环境诊断"
         echo -e "    (10) 查看最近诊断报告"
         echo -e "    (11) 配置备份与恢复"
+        echo -e "    (12) 更新管理面板脚本"
         echo -e "    (0)  退出面板"
         print_line
         
-        read -p " => 请选择操作 [0-11]: " menu_num
+        read -p " => 请选择操作 [0-12]: " menu_num
         
         case "${menu_num}" in
             1) install_hy2_core; sleep 2 ;;
@@ -1329,6 +1390,7 @@ main_menu() {
             9) show_diagnostics ;;
             10) show_latest_diagnostics_report ;;
             11) show_backup_restore_menu ;;
+            12) update_panel_script ;;
             0) exit 0 ;;
             *) err "输入错误"; sleep 1 ;;
         esac
