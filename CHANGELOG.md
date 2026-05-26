@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.1 - 2026-05-26
+
+- Modularized the hy2 panel into a lightweight launcher plus lazy-loaded runtime modules.
+- Updated installer and self-update flow to install launcher and modules together.
+- Added module-loading smoke checks and a Linux RSS measurement helper.
+
 ## v1.4.1 - 2026-05-24
 
 - 发布页标题改为纯版本号，不再在版本号前追加 `Hysteria2-LuoPo`。
