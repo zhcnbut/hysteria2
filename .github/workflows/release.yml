@@ -79,12 +79,18 @@ jobs:
 
       - name: Check if Release is Needed
         id: check_release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "${{ env.VERSION }}" == "${{ env.LATEST_TAG }}" ]; then
-            echo "版本 ${{ env.VERSION }} 已存在，无需发布新 Release。自动跳过。"
+          if gh release view "${{ env.VERSION }}" >/dev/null 2>&1; then
+            echo "Release ${{ env.VERSION }} already exists. Skipping."
             echo "should_release=false" >> $GITHUB_ENV
           else
-            echo "检测到新版本: ${{ env.VERSION }}。准备自动发布！"
+            if [ "${{ env.VERSION }}" == "${{ env.LATEST_TAG }}" ]; then
+              echo "Tag ${{ env.VERSION }} already exists, but release is missing. Creating release."
+            else
+              echo "New version ${{ env.VERSION }} detected. Creating release."
+            fi
             echo "should_release=true" >> $GITHUB_ENV
           fi
 
